@@ -2,7 +2,29 @@
 
 Every dataset used in this project, where it came from, what its fields mean, and what's wrong with it.
 
-Nothing under `data/` is committed. `scripts/download_data.sh` fetches and checksum-verifies everything described here.
+Nothing under `data/` is committed. Files currently on disk:
+
+```
+data/
+├── fishing-vessels-v3.csv
+├── fishing-vessels-v3.schema.json
+├── mmsi-daily-csvs-10-v3-2023.zip
+├── named_anchorages_v2_pipe_v4_202608.csv
+├── mmsi-daily-csvs-10-v3-2023/          # 365 daily CSVs, 2023-01-01 … 2023-12-31
+├── mmsi-daily-csvs-10-v3-2024/          # 366 daily CSVs, 2024-01-01 … 2024-12-31
+├── GEBCO_02_Sep_2026_cb6d79a83e83/
+│   ├── gebco_2026_n-30.783_s-58.195_w99.967_e159.976.nc
+│   ├── gebco_2026_n-30.783_s-58.195_w99.967_e159.976_geotiff.tif
+│   ├── GEBCO_Grid_documentation.pdf
+│   └── GEBCO_Grid_terms_of_use.pdf
+└── World_EEZ_v12_20231025_gpkg/
+    └── World_EEZ_v12_20231025_gpkg/
+        ├── eez_v12.gpkg
+        ├── eez_boundaries_v12.gpkg
+        └── LICENSE_EEZ_v12.txt
+```
+
+Not present: `mmsi-daily-csvs-10-v3-2024.zip` (2024 is extracted only), GFW README files (`README-known-issues-v3.txt`, `README-mmsi-v3.txt`, `README-fishing-vessels-v3.txt`), WDPA / Protected Planet.
 
 ---
 
@@ -19,15 +41,16 @@ Positions are binned into grid cells; coordinates give the **lower-left corner**
 
 ### Files used
 
-| File | Size | MD5 |
-| --- | --- | --- |
-| `mmsi-daily-csvs-10-v3-2023.zip` | 739.2 MB | `7b55cca87029903c9becd09b11810455` |
-| `mmsi-daily-csvs-10-v3-2024.zip` | 745.7 MB | `51b0988ac6258482c1666c113c93f004` |
-| `fishing-vessels-v3.csv` | 114.8 MB | `b5ba27cedd5426c0bcb8e6009e911cf0` |
-| `README-known-issues-v3.txt` | 11.1 kB | — |
-| `README-mmsi-v3.txt` | 3.4 kB | — |
+| File | On disk | Size | MD5 |
+| --- | --- | --- | --- |
+| `mmsi-daily-csvs-10-v3-2023.zip` | yes | 739.2 MB | `7b55cca87029903c9becd09b11810455` |
+| `mmsi-daily-csvs-10-v3-2024.zip` | **no** — extracted CSVs only | 745.7 MB (Zenodo) | `51b0988ac6258482c1666c113c93f004` |
+| `fishing-vessels-v3.csv` | yes | 114.8 MB | `b5ba27cedd5426c0bcb8e6009e911cf0` |
+| `fishing-vessels-v3.schema.json` | yes | 4.3 kB | — |
+| `mmsi-daily-csvs-10-v3-2023/` | yes | 365 CSVs, ~3.4 GB | — |
+| `mmsi-daily-csvs-10-v3-2024/` | yes | 366 CSVs, ~3.4 GB | — |
 
-Each zip contains one CSV per day. They are read from inside the archive and never extracted.
+2023 and 2024 daily folders are complete (every calendar day; 2024 is a leap year). Each daily file is named `mmsi-daily-csvs-10-v3-YYYY-MM-DD.csv`. Both years share the same header. MD5s for the zips and vessel CSV come from the Zenodo record; the 2023 zip and vessel CSV match.
 
 ### Interaction schema — `mmsi-daily`, 0.1° resolution
 
@@ -47,25 +70,44 @@ Each zip contains one CSV per day. They are read from inside the archive and nev
 
 ### Vessel schema — `fishing-vessels-v3.csv`
 
-Provides flag state, gear type, length, tonnage, engine power, and activity per year.
+One row per MMSI per year in which the vessel was active (`year` from 2012–2024). Column names match `fishing-vessels-v3.schema.json`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `mmsi` | STRING | AIS identifier |
+| `year` | INTEGER | Year this row applies to |
+| `flag_ais` | STRING | Flag from the MMSI MID (ISO3) |
+| `flag_registry` | STRING | Flag as listed on vessel registries |
+| `flag_gfw` | STRING | Flag assigned by GFW after all sources |
+| `vessel_class_inferred` | STRING | Gear class from GFW's neural net |
+| `vessel_class_inferred_score` | FLOAT | Neural-net confidence, 0–1 |
+| `vessel_class_registry` | STRING | Gear class from registries |
+| `vessel_class_gfw` | STRING | Gear class assigned by GFW after all sources |
+| `self_reported_fishing_vessel` | BOOLEAN | AIS ship type is Fishing in >98% of identity messages |
+| `length_m_inferred` / `_registry` / `_gfw` | FLOAT | Length in metres |
+| `engine_power_kw_inferred` / `_registry` / `_gfw` | FLOAT | Engine power in kW |
+| `tonnage_gt_inferred` / `_registry` / `_gfw` | FLOAT | Gross tonnage |
+| `registries_listed` | STRING | Registries used for the `_registry` fields |
+| `active_hours` | FLOAT | Hours broadcasting AIS and moving faster than 0.1 knots |
+| `fishing_hours` | FLOAT | Hours detected as fishing that year |
 
 > **Breaking change in v3 — read this before joining.** In v2, each MMSI had one row with per-year fishing-hours columns. In v3, an MMSI gets **one row per year in which it was active**, with a single `year` column and a single `fishing_hours` column. This was done so vessel classification can change across years as registry information updates.
 >
 > Consequence: joining vessel metadata to interactions without filtering on `year` will fan out your rows and silently corrupt the matrix. Always constrain the join to the matching year.
 
-Inspect column names on first load rather than assuming them; confirm against `README-fishing-vessels-v3.txt`.
+Use the `*_gfw` columns (flag, class, length, power, tonnage) unless you specifically need inferred vs registry provenance.
 
 **How the fields are used**
 
-- **Gear type** — the strongest metadata predictor. Trawlers, drifting longliners and purse seiners target structurally different waters. Also a free model sanity check: if learned latent factors don't roughly separate by gear, something is wrong.
-- **Length, tonnage, engine power** — proxies for range and capacity. Primary cold-start features, and a sanity filter on physically implausible recommendations.
-- **Flag** — fleet-level behavioural signal; secondary cold-start feature.
+- **Gear type** (`vessel_class_gfw`) — the strongest metadata predictor. Trawlers, drifting longliners and purse seiners target structurally different waters. Also a free model sanity check: if learned latent factors don't roughly separate by gear, something is wrong.
+- **Length, tonnage, engine power** (`length_m_gfw`, `tonnage_gt_gfw`, `engine_power_kw_gfw`) — proxies for range and capacity. Primary cold-start features, and a sanity filter on physically implausible recommendations.
+- **Flag** (`flag_gfw`) — fleet-level behavioural signal; secondary cold-start feature.
 
-**Caveat on provenance.** GFW's vessel characterisation model assigns every active MMSI to one of 40 vessel classes and *infers* length, tonnage and engine power. Many vessels have no registry record, so these attributes are model estimates, not verified facts. Registry data quality also varies substantially by flag state, which introduces uneven information across fleets.
+**Caveat on provenance.** Length, tonnage, engine power and class are often model estimates rather than registry facts — the `_registry` columns are sparsely filled. Registry data quality also varies substantially by flag state, which introduces uneven information across fleets.
 
 ### Known issues
 
-Read `README-known-issues-v3.txt` in full before modelling. The significant ones:
+The GFW `README-known-issues-v3.txt` is not in `data/`. The significant ones from the dataset docs:
 
 1. **2024 is provisional.** Vessel classifications may change as 2025 data arrives.
 2. **MMSI is not reliably unique.** It is intended as a unique AIS identifier but this does not always hold in practice — vessels share, reuse, and misconfigure it. Since MMSI is the user key, this is direct noise in the matrix.
@@ -79,57 +121,77 @@ Read `README-known-issues-v3.txt` in full before modelling. The significant ones
 ## 2. GEBCO_2026 — seabed depth
 
 **Source:** [download.gebco.net](https://download.gebco.net/) (area-subsetting application)
-**Licence:** public domain, free to use with attribution
-**Resolution:** 15 arc-second global grid
+**Licence:** public domain, free to use with attribution — see `GEBCO_Grid_terms_of_use.pdf`
+**Resolution:** 15 arc-second grid, WGS84 (EPSG:4326)
+**On disk:** `data/GEBCO_02_Sep_2026_cb6d79a83e83/`
 
-Published April 2026, the eighth grid produced through the Nippon Foundation–GEBCO Seabed 2030 Project. Provides elevation in metres for ocean and land. Available as netCDF, GeoTIFF or Esri ASCII raster.
+Published April 2026. Regional subset, not the global file:
 
-**Download a regional subset, not the global file.** The subsetting app lets you request a bounding box, which keeps this to tens of megabytes.
+| File | Size |
+| --- | --- |
+| `gebco_2026_n-30.783_s-58.195_w99.967_e159.976.nc` | 180.9 MB |
+| `gebco_2026_n-30.783_s-58.195_w99.967_e159.976_geotiff.tif` | 180.8 MB |
+| `GEBCO_Grid_documentation.pdf` | 260 kB |
+| `GEBCO_Grid_terms_of_use.pdf` | 142 kB |
+
+**Bounding box:** 58.195°S–30.783°S, 99.967°E–159.976°E (southern Australia and the Southern Ocean to the south of it). Does not cover northern Australian waters or most external-territory EEZs (Heard & McDonald, Christmas Island, Norfolk, Cocos).
+
+NetCDF and GeoTIFF are the same grid in two formats. GeoTIFF is 14402 × 6579 pixels, 15 arc-second spacing, pixel-centre registered, elevation in metres.
 
 **Use:** aggregate to mean and minimum depth per 0.1° cell. Depth is arguably the strongest physical constraint on which gear can operate where, and it is the single most valuable feature not present in the raw GFW data.
 
-Attribution: *GEBCO Bathymetric Compilation Group 2026, GEBCO_2026 Grid.*
+Attribution: *GEBCO Bathymetric Compilation Group 2026 (2026). The GEBCO_2026 Grid — a continuous terrain model for oceans and land at 15 arc-second intervals. NERC EDS British Oceanographic Data Centre NOC. doi:10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa*
 
 ---
 
 ## 3. Marine Regions — World EEZ v12
 
 **Source:** [marineregions.org](https://www.marineregions.org/)
-**Version:** v12, released 25 October 2023, 122 MB
-**Format used:** GeoPackage — a single `.gpkg` file rather than the shapefile's multi-file bundle
+**Version:** v12, released 25 October 2023
+**Licence:** CC BY 4.0 — not for legal, economic-exploration, or navigational use
+**On disk:** `data/World_EEZ_v12_20231025_gpkg/World_EEZ_v12_20231025_gpkg/`
 
-200-nautical-mile Exclusive Economic Zone polygons.
+| File | Size |
+| --- | --- |
+| `eez_v12.gpkg` | 156.8 MB |
+| `eez_boundaries_v12.gpkg` | 15.1 MB |
+| `LICENSE_EEZ_v12.txt` | 2.3 kB |
 
-Use the standard −180…180 longitude version, not the 0–360 variant, to match GFW's convention. Use the full-resolution version, not low-res.
+200-nautical-mile Exclusive Economic Zone polygons. Longitude range is −180…180 (WGS84, EPSG:4326), matching GFW. Layer name in the GeoPackage is `eez_v12` (285 features). Attribute columns include `SOVEREIGN1`, `TERRITORY1`, `GEONAME`, `POL_TYPE`, `ISO_SOV1`, `ISO_TER1`.
+
+Australia has six polygons: mainland, Christmas Island, Cocos Islands, Heard and McDonald Islands, Norfolk Island, and Macquarie Island. Record which you included and why.
 
 **Use:** point-in-polygon join tagging each cell with jurisdiction; also the mechanism for scoping analysis to a single EEZ.
 
 ```python
 import geopandas as gpd
-eez = gpd.read_file("data/raw/eez_v12.gpkg")
-print(eez.columns)                       # inspect before filtering
+eez = gpd.read_file(
+    "data/World_EEZ_v12_20231025_gpkg/World_EEZ_v12_20231025_gpkg/eez_v12.gpkg"
+)
+print(eez.columns)
 aus = eez[eez["SOVEREIGN1"] == "Australia"]
 ```
 
-Note Australia has several disjoint EEZ polygons — mainland plus external territories such as Heard & McDonald, Norfolk and Christmas Island. Record which you included and why.
+Citation: *Flanders Marine Institute (2023). Maritime Boundaries Geodatabase: Maritime Boundaries and Exclusive Economic Zones (200NM), version 12. https://doi.org/10.14284/632*
 
 ---
 
 ## 4. GFW Named Anchorages
 
 **Source:** Global Fishing Watch data download portal
-**File used:** `named_anchorages_v2_pipe_v4_202608` (18.45 MB, dated 9 January 2026)
+**On disk:** `data/named_anchorages_v2_pipe_v4_202608.csv` (18.45 MB)
 
 Locations where vessels congregate and remain stationary — effectively a global port and anchorage registry.
 
-Two handling notes:
+Comma-separated despite `pipe` in the filename. Header:
 
-- **Check the delimiter before parsing.** Recent releases carry no `.csv` extension and `pipe` appears in the filename. `head -3` the file and set the separator accordingly. `named_anchorages_v2_20221206.csv` is a plain-CSV fallback with substantially the same port locations.
+`s2id,lat,lon,label,sublabel,label_source,iso3,distance_from_shore_m,drift_radius,at_dock`
+
 - **Multiple rows per port.** Anchorages are clustered points, so one port yields many rows. For distance-to-port, take the minimum distance across all anchorage points rather than deduplicating to a single centroid.
 
 **Use:** `distance_to_nearest_port` per cell. Explains range constraints on smaller vessels and materially improves cold-start predictions.
 
-Only the latest snapshot is needed — port locations are near-static, so there's no value in a time series.
+Only this snapshot is needed — port locations are near-static, so there's no value in a time series.
 
 ---
 
@@ -137,7 +199,7 @@ Only the latest snapshot is needed — port locations are near-static, so there'
 
 **Source:** [protectedplanet.net](https://www.protectedplanet.net/)
 
-The constraint layer. Recommendations are filtered against MPA polygons at serving time so the system cannot suggest a closed area, and the UI shows the next-best legal alternative instead.
+Not downloaded yet. The constraint layer: recommendations are filtered against MPA polygons at serving time so the system cannot suggest a closed area, and the UI shows the next-best legal alternative instead.
 
 Check the current terms of use before redistributing any derived layer.
 
@@ -145,7 +207,7 @@ Check the current terms of use before redistributing any derived layer.
 
 ## Processed artefacts
 
-Written by the pipeline into `data/processed/`, all gitignored.
+None yet. Planned outputs, written by the pipeline into `data/processed/`, all gitignored.
 
 | Artefact | Description |
 | --- | --- |
@@ -160,13 +222,9 @@ Written by the pipeline into `data/processed/`, all gitignored.
 
 ## Reproducing
 
-```bash
-./scripts/download_data.sh     # idempotent; skips verified files, checks MD5
-python -m src.ingest.build     # zips → partitioned Parquet
-python -m src.features.spatial # joins depth, EEZ, port distance
-```
+Checksums for the GFW zips and vessel CSV come from the Zenodo record page. A mismatch means a corrupt or truncated download — delete the file and re-fetch rather than proceeding. The 2023 zip and `fishing-vessels-v3.csv` have been checked and match.
 
-Checksums above come from the Zenodo record page. A mismatch means a corrupt or truncated download — delete the file and re-run rather than proceeding.
+2024 daily CSVs are already extracted; the 2024 zip is not on disk. GEBCO and EEZ were downloaded as the regional / GeoPackage products above, not via a project script.
 
 ---
 
@@ -194,6 +252,22 @@ Checksums above come from the Zenodo record page. A mismatch means a corrupt or 
   year    = {2018},
   doi     = {10.1126/science.aao5646}
 }
-```
 
-Also cite GEBCO Bathymetric Compilation Group 2026, Marine Regions World EEZ v12, and UNEP-WCMC/IUCN Protected Planet where those layers are used.
+@dataset{gebco_2026,
+  author    = {{GEBCO Bathymetric Compilation Group 2026}},
+  title     = {The {GEBCO\_2026} Grid -- a continuous terrain model for oceans
+               and land at 15 arc-second intervals},
+  year      = {2026},
+  publisher = {NERC EDS British Oceanographic Data Centre NOC},
+  doi       = {10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa}
+}
+
+@dataset{marineregions_eez_v12,
+  author    = {{Flanders Marine Institute}},
+  title     = {Maritime Boundaries Geodatabase: Maritime Boundaries and
+               Exclusive Economic Zones (200{NM})},
+  version   = {12},
+  year      = {2023},
+  doi       = {10.14284/632}
+}
+```
