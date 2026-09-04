@@ -6,24 +6,11 @@ import logging
 
 import duckdb
 
+from src.parquet_io import copy_query_to_parquet
 from src.paths import BRONZE_VESSELS_PATH, QUARANTINE_VESSELS_PATH, VESSELS_PATH, YEARS
 from src.runtime import PeakMemory
 
 LOG = logging.getLogger(__name__)
-
-
-def _copy_parquet(con: duckdb.DuckDBPyConnection, sql: str, dest, params: list) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(".parquet.tmp")
-    if tmp.exists():
-        tmp.unlink()
-    con.execute(
-        f"COPY ({sql}) TO ? (FORMAT PARQUET, COMPRESSION ZSTD)",
-        [*params, tmp.as_posix()],
-    )
-    if dest.exists():
-        dest.unlink()
-    tmp.replace(dest)
 
 
 def clean_vessels(
@@ -105,7 +92,7 @@ def clean_vessels(
             ).fetchone()[0]
         )
 
-        _copy_parquet(
+        copy_query_to_parquet(
             con,
             f"""
             SELECT
@@ -145,7 +132,7 @@ def clean_vessels(
 
         quarantined = n_invalid + n_dup
         if quarantined:
-            _copy_parquet(
+            copy_query_to_parquet(
                 con,
                 """
                 SELECT * FROM staged WHERE reject_reason IS NOT NULL

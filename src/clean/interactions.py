@@ -13,6 +13,7 @@ from pathlib import Path
 import duckdb
 
 from src.clean.policies import REJECT_REASON_SQL
+from src.parquet_io import copy_query_to_parquet
 from src.paths import (
     BRONZE_INTERACTIONS_DIR,
     INTERACTIONS_DIR,
@@ -33,18 +34,8 @@ def _parquet_glob(directory: Path) -> str:
 
 
 def _write_parquet(con: duckdb.DuckDBPyConnection, sql: str, dest: Path, params: list) -> int:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(".parquet.tmp")
-    if tmp.exists():
-        tmp.unlink()
-    con.execute(
-        f"COPY ({sql}) TO ? (FORMAT PARQUET, COMPRESSION ZSTD)",
-        [*params, tmp.as_posix()],
-    )
-    n = con.execute("SELECT count(*) FROM read_parquet(?)", [tmp.as_posix()]).fetchone()[0]
-    if dest.exists():
-        dest.unlink()
-    tmp.replace(dest)
+    copy_query_to_parquet(con, sql, dest, params)
+    n = con.execute("SELECT count(*) FROM read_parquet(?)", [dest.as_posix()]).fetchone()[0]
     return int(n)
 
 
