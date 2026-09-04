@@ -9,9 +9,10 @@ from __future__ import annotations
 import argparse
 import logging
 
+from src.clean.report import utcnow, write_report
 from src.ingest.bronze import land_interactions
 from src.ingest.vessels import land_vessels
-from src.paths import YEARS
+from src.paths import REPORTS_DIR, YEARS
 from src.runtime import PeakMemory, setup_logging
 
 LOG = logging.getLogger(__name__)
@@ -47,12 +48,17 @@ def main(argv: list[str] | None = None) -> dict:
     setup_logging(args.log_level)
     memory = PeakMemory()
     summary = {
+        "stage": "bronze",
+        "started_at": utcnow(),
+        "years": list(args.years),
         "interactions": land_interactions(args.years, force=args.force, memory=memory),
         "vessels": None if args.skip_vessels else land_vessels(force=args.force, memory=memory),
         "peak_rss_bytes": memory.sample(),
         "peak_rss_mb": round(memory.peak_mb, 2),
     }
-    LOG.info("bronze complete; peak RSS %.1f MB", memory.peak_mb)
+    summary["finished_at"] = utcnow()
+    path = write_report(summary, REPORTS_DIR / "bronze.json")
+    LOG.info("bronze complete; peak RSS %.1f MB; report %s", memory.peak_mb, path)
     return summary
 
 
