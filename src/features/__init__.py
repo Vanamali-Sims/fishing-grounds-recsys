@@ -1,1 +1,1 @@
-"""Spatial joins for the cell dimension. Implemented in A3."""
+"""Gold cell dimension: depth, EEZ, port distance, MPA flag."""
