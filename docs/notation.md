@@ -5,7 +5,7 @@ Bronze and silver are two **layers of the same data**, not two datasets.
 They come from the medallion pattern used in data pipelines: raw first, clean second. Landing and cleaning are never mixed in one step, because then you cannot tell what the source said versus what we changed.
 
 ```
-GFW zip / CSV  ──►  bronze  ──►  silver  ──►  gold (later)
+GFW zip / CSV  ──►  bronze  ──►  silver  ──►  gold
                  as landed      cleaned      modelled artefacts
 ```
 
@@ -13,9 +13,9 @@ GFW zip / CSV  ──►  bronze  ──►  silver  ──►  gold (later)
 | --- | --- | --- |
 | **Bronze** | Faithful copy of the source | `data/processed/bronze/` |
 | **Silver** | Validated, repaired, derived | `data/processed/interactions/`, `data/processed/vessels.parquet` |
-| **Gold** | Model-ready artefacts | Not built yet (`cells.parquet`, `matrix.npz`, …) |
+| **Gold** | Model-ready artefacts | `cells.parquet`, `fishing_events.parquet`, `matrix.npz`, `splits/` |
 
-Commands: `python -m src.ingest.build` writes bronze. `python -m src.clean.build` writes silver. `python -m src.pipeline` runs both.
+Commands: `python -m src.ingest.build` writes bronze. `python -m src.clean.build` writes silver. `python -m src.pipeline` runs both. `python -m src.features.matrix` writes the gold matrix. `python -m src.eval.report` writes the temporal split.
 
 ---
 
@@ -64,6 +64,18 @@ That is why ingest does not handle empty `fishing_hours` internally and write a 
 
 ---
 
-## Gold — not yet
+## Gold — modelled artefacts
 
-Gold is later: `cells.parquet` (depth, EEZ, port distance, MPA), `matrix.npz`, model scores. Those are modelled or joined artefacts, not a third copy of the daily table.
+Gold is not a third copy of the daily table. It is derived from silver for modelling.
+
+- `cells.parquet` — cell dimension (depth, EEZ, port distance, MPA)
+- `fishing_events.parquet` — silver rows that survive the B1 transit filter (and EEZ scope)
+- `matrix.npz` — vessel × cell CSR over the full modelling window, plus MMSI/cell index maps
+- `splits/train.npz` — same maps, Q4 2024 held out
+- `splits/test_relevant.parquet` — Q4 cells per vessel, flagged as new-ground or cold-start
+
+Transit filtering (low `fishing_ratio`) happens here, not in silver. The core matrix is scoped to the Australian EEZ; pass `--scope global` to skip that join.
+
+Commands: `python -m src.features.matrix` writes events + CSR. `python -m src.eval.report` writes the temporal split and protocol counts. Ranking metrics live in `src.eval`; baselines (B3) and ALS (B4) call the harness.
+
+**Evaluation protocol.** Train on 2023 through 2024-09-30, test on Q4 2024. Relevant items for a warm vessel are cells fished in the test window that the vessel did not fish in train (new grounds). Cold-start vessels (first seen in Q4) are counted separately and excluded from collaborative-filtering metrics.

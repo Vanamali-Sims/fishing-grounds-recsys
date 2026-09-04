@@ -1,1 +1,1 @@
-"""Gold cell dimension: depth, EEZ, port distance, MPA flag."""
+"""Gold cell dimension and vessel×cell matrix."""

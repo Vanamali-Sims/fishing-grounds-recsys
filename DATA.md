@@ -207,14 +207,17 @@ Check the current terms of use before redistributing any derived layer.
 
 ## Processed artefacts
 
-None yet. Planned outputs, written by the pipeline into `data/processed/`, all gitignored.
+Written by the pipeline into `data/processed/`, all gitignored.
 
 | Artefact | Description |
 | --- | --- |
 | `interactions/` | Partitioned Parquet, one partition per year-month |
 | `cells.parquet` | Cell dimension: `cell_id`, centroid, depth, EEZ, distance-to-port, MPA flag |
 | `vessels.parquet` | Vessel dimension, filtered to the modelling years |
-| `matrix.npz` | Sparse vessel × cell CSR matrix plus index mappings |
+| `fishing_events.parquet` | Transit-filtered fishing rows used to build the matrix |
+| `matrix.npz` | Sparse vessel × cell CSR matrix plus index mappings (full window) |
+| `splits/train.npz` | Train CSR, same index maps, Q4 2024 held out |
+| `splits/test_relevant.parquet` | Q4 vessel–cell pairs with new-ground / cold-start flags |
 
 **Partitioning.** Interactions are partitioned by year and month so temporal-split queries read only the partitions they need. This is what makes the train/test split cheap enough to iterate on.
 

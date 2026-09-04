@@ -9,6 +9,9 @@ Layout (medallion):
 - ``interactions/`` — silver (clean) interactions, year/month partitioned.
 - ``vessels.parquet`` — silver vessel dimension, modelling years only.
 - ``cells.parquet`` — gold cell dimension (A3: depth, EEZ, port distance, MPA).
+- ``fishing_events.parquet`` — gold fishing events (B1: transit filtered).
+- ``matrix.npz`` — vessel × cell CSR plus index maps (full modelling window).
+- ``splits/`` — temporal train CSR and test relevance (B2).
 - ``quarantine/`` — rows that failed a hard validation rule.
 - ``reports/`` — row counts, repairs, observations, peak memory.
 """
@@ -27,6 +30,11 @@ BRONZE_VESSELS_PATH = BRONZE_DIR / "vessels.parquet"
 INTERACTIONS_DIR = PROCESSED_DIR / "interactions"
 VESSELS_PATH = PROCESSED_DIR / "vessels.parquet"
 CELLS_PATH = PROCESSED_DIR / "cells.parquet"
+FISHING_EVENTS_PATH = PROCESSED_DIR / "fishing_events.parquet"
+MATRIX_PATH = PROCESSED_DIR / "matrix.npz"
+SPLITS_DIR = PROCESSED_DIR / "splits"
+TRAIN_MATRIX_PATH = SPLITS_DIR / "train.npz"
+TEST_RELEVANT_PATH = SPLITS_DIR / "test_relevant.parquet"
 
 # A3 spatial inputs (raw, gitignored)
 GEBCO_DIR = DATA_DIR / "GEBCO_02_Sep_2026_cb6d79a83e83"
