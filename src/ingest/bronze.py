@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.csv as pacsv
