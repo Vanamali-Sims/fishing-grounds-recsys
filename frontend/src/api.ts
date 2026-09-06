@@ -1,4 +1,5 @@
 import type {
+  Anomaly,
   HistoryRow,
   Recommendation,
   Stats,
@@ -36,12 +37,18 @@ export function getHistory(mmsi: string): Promise<HistoryRow[]> {
 export function getRecommendations(
   mmsi: string,
   excludeMpa: boolean,
+  season = "",
 ): Promise<Recommendation[]> {
   const params = new URLSearchParams({
     k: "50",
     exclude_mpa: String(excludeMpa),
   });
+  if (season) params.set("season", season);
   return getJson(`/vessels/${mmsi}/recommendations?${params}`);
+}
+
+export function getAnomalies(): Promise<Anomaly[]> {
+  return getJson("/anomalies?limit=8");
 }
 
 export function getStats(): Promise<Stats> {

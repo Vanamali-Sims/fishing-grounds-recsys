@@ -102,7 +102,7 @@ python -m src.eval.report         # temporal split + leak check
 python -m src.models.baselines    # popularity vs popularity-by-gear
 python -m src.models.train        # ALS + content fold-in
 
-uvicorn api.main:app --reload     # API on :8000
+uvicorn api.main:app --reload     # API on :8000 (ALS if gold artefacts exist)
 cd frontend && npm install && npm run dev
 ```
 

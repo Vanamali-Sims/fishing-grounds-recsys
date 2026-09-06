@@ -4,29 +4,41 @@ import { cellSquare, type HistoryRow, type Recommendation } from "./types";
 const TEAK: [number, number, number] = [166, 124, 72];
 const FOAM: [number, number, number] = [126, 184, 201];
 const MPA: [number, number, number] = [196, 92, 74];
+const HIGHLIGHT: [number, number, number, number] = [244, 239, 230, 230];
 
 function scaleAlpha(value: number, max: number, lo = 80, hi = 210): number {
   if (max <= 0) return hi;
   return Math.round(lo + (hi - lo) * Math.min(1, value / max));
 }
 
-export function historyLayer(rows: HistoryRow[]): PolygonLayer<ReturnType<typeof cellSquare<HistoryRow>>> {
+function lineColor(cellId: string, focus: string | null): [number, number, number, number] {
+  if (focus && cellId === focus) return HIGHLIGHT;
+  return [244, 239, 230, 140];
+}
+
+export function historyLayer(
+  rows: HistoryRow[],
+  focus: string | null,
+): PolygonLayer<ReturnType<typeof cellSquare<HistoryRow>>> {
   const maxHours = Math.max(...rows.map((r) => r.fishing_hours), 1);
   return new PolygonLayer({
     id: "observed-cells",
     data: rows.map(cellSquare),
     getPolygon: (d) => d.polygon,
     getFillColor: (d) => [...TEAK, scaleAlpha(d.fishing_hours, maxHours)],
-    getLineColor: [244, 239, 230, 140],
+    getLineColor: (d) => lineColor(d.cell_id, focus),
+    getLineWidth: (d) => (d.cell_id === focus ? 3 : 1),
     lineWidthMinPixels: 1,
     stroked: true,
     filled: true,
     pickable: true,
+    updateTriggers: { getLineColor: focus, getLineWidth: focus },
   });
 }
 
 export function recommendationLayer(
   rows: Recommendation[],
+  focus: string | null,
 ): PolygonLayer<ReturnType<typeof cellSquare<Recommendation>>> {
   const maxScore = Math.max(...rows.map((r) => r.score), 1);
   return new PolygonLayer({
@@ -38,10 +50,30 @@ export function recommendationLayer(
       if (d.in_mpa) return [...MPA, alpha];
       return [...FOAM, alpha];
     },
-    getLineColor: [244, 239, 230, 140],
+    getLineColor: (d) => lineColor(d.cell_id, focus),
+    getLineWidth: (d) => (d.cell_id === focus ? 3 : 1),
     lineWidthMinPixels: 1,
     stroked: true,
     filled: true,
     pickable: true,
+    updateTriggers: { getLineColor: focus, getLineWidth: focus },
+  });
+}
+
+export function mpaOverlayLayer(
+  rows: Recommendation[],
+): PolygonLayer<ReturnType<typeof cellSquare<Recommendation>>> {
+  const flagged = rows.filter((row) => row.in_mpa === true);
+  return new PolygonLayer({
+    id: "mpa-overlay",
+    data: flagged.map(cellSquare),
+    getPolygon: (d) => d.polygon,
+    getFillColor: [...MPA, 70],
+    getLineColor: [...MPA, 220],
+    getLineWidth: 2,
+    lineWidthMinPixels: 2,
+    stroked: true,
+    filled: true,
+    pickable: false,
   });
 }

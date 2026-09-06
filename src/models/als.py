@@ -99,6 +99,28 @@ def fit_als(
     return users, items
 
 
+def recommend_user(
+    user_vec: np.ndarray,
+    item_factors: np.ndarray,
+    seen_cols: np.ndarray,
+    cell_id: np.ndarray,
+    k: int,
+) -> list[tuple[str, float]]:
+    """Top-k cells for one vessel, excluding already-fished columns."""
+    scores = user_vec @ item_factors.T
+    if len(seen_cols):
+        scores[np.asarray(seen_cols, dtype=np.int32)] = -np.inf
+    n_items = scores.shape[0]
+    k_eff = min(max(k, 1), n_items)
+    ranked_idx = np.argpartition(scores, -k_eff)[-k_eff:]
+    ranked_idx = ranked_idx[np.argsort(-scores[ranked_idx], kind="stable")]
+    return [
+        (str(cell_id[i]), float(scores[i]))
+        for i in ranked_idx
+        if np.isfinite(scores[i])
+    ][:k]
+
+
 def recommend_als(
     user_factors: np.ndarray,
     item_factors: np.ndarray,

@@ -222,6 +222,88 @@ select {
   border: 1px solid var(--line);
 }
 
+.chart-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.chart-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 20, 28, 0.45);
+  color: var(--brass);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.45rem;
+  vertical-align: -0.1rem;
+  border: 1px solid var(--line);
+}
+
+.swatch.teak { background: #a67c48; }
+.swatch.foam { background: #7eb8c9; }
+.swatch.mpa { background: #c45c4a; }
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.skeleton div {
+  height: 2.4rem;
+  background: linear-gradient(90deg, rgba(166, 124, 72, 0.08), rgba(166, 124, 72, 0.2), rgba(166, 124, 72, 0.08));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+.anomalies {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+}
+
+.anomalies button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.anomalies button:hover {
+  color: var(--ink);
+}
+
 @media (max-width: 960px) {
   .app,
   .charts {

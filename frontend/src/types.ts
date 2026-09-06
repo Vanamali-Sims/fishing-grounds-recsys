@@ -37,6 +37,14 @@ export type Recommendation = {
   reason: string;
 };
 
+export type Anomaly = {
+  mmsi: string;
+  cell_id: string;
+  date: string;
+  score: number;
+  observed_hours: number;
+};
+
 export type Stats = {
   n_vessels: number;
   n_cells: number;
