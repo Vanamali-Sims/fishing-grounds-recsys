@@ -1,0 +1,240 @@
+:root {
+  --deep: #08141c;
+  --navy: #102333;
+  --sea: #1a4460;
+  --foam: #7eb8c9;
+  --ink: #f4efe6;
+  --muted: #cbbba0;
+  --teak: #a67c48;
+  --brass: #c9a45b;
+  --rope: #6b4226;
+  --mpa: #c45c4a;
+  --line: rgba(201, 164, 91, 0.28);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--deep);
+  color: var(--ink);
+  font-family: "Source Sans 3", system-ui, sans-serif;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: 100%;
+}
+
+.dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.25rem 1.1rem 1.4rem;
+  background:
+    linear-gradient(180deg, rgba(166, 124, 72, 0.12), transparent 28%),
+    var(--navy);
+  border-right: 1px solid var(--line);
+  overflow: auto;
+}
+
+.brand {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.anchor {
+  width: 42px;
+  height: 42px;
+  color: var(--brass);
+  flex: 0 0 auto;
+}
+
+.eyebrow {
+  margin: 0;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  color: var(--teak);
+}
+
+h1 {
+  margin: 0;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.lede,
+.muted,
+.error,
+.reason {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.lede,
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--mpa);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.stats div {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  background: rgba(8, 20, 28, 0.45);
+}
+
+dt {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teak);
+}
+
+dd {
+  margin: 0.15rem 0 0;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.35rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--teak);
+}
+
+input,
+select {
+  font: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  background: var(--deep);
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.6rem;
+}
+
+.check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.fleet {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.fleet button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  padding: 0.55rem 0.6rem;
+  cursor: pointer;
+}
+
+.fleet button span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.fleet button.active,
+.fleet button:hover {
+  border-color: var(--brass);
+  background: rgba(166, 124, 72, 0.12);
+}
+
+.card {
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}
+
+.card h2 {
+  margin: 0 0 0.25rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.35rem;
+}
+
+.card p {
+  margin: 0.2rem 0;
+  color: var(--muted);
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 0;
+  height: 100%;
+}
+
+.chart {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  border-left: 1px solid var(--line);
+}
+
+.chart h2 {
+  position: absolute;
+  z-index: 2;
+  top: 0.85rem;
+  left: 0.9rem;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brass);
+  background: rgba(8, 20, 28, 0.72);
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 960px) {
+  .app,
+  .charts {
+    grid-template-columns: 1fr;
+  }
+
+  .app {
+    height: auto;
+  }
+
+  .chart {
+    height: 52vh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
