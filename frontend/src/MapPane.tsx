@@ -5,13 +5,18 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { HistoryRow, Recommendation } from "./types";
 import { historyLayer, mpaOverlayLayer, recommendationLayer } from "./layers";
 
+const CARTO_KEY = import.meta.env.VITE_CARTO_API_KEY;
+const CARTO_TILES = CARTO_KEY
+  ? `https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png?key=${CARTO_KEY}`
+  : "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png";
+
 const MAP_STYLE = {
   version: 8 as const,
   name: "sea-anchor-dark",
   sources: {
     carto: {
       type: "raster" as const,
-      tiles: ["https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png"],
+      tiles: [CARTO_TILES],
       tileSize: 256,
       attribution: "&copy; OpenStreetMap &copy; CARTO",
     },
