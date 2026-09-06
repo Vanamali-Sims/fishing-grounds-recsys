@@ -1,5 +1,5 @@
 import { PolygonLayer } from "@deck.gl/layers";
-import { cellSquare, type HistoryRow, type Recommendation } from "./types";
+import { cellSquare, type HistoryRow, type MpaCell, type Recommendation } from "./types";
 
 const TEAK: [number, number, number] = [166, 124, 72];
 const FOAM: [number, number, number] = [126, 184, 201];
@@ -61,17 +61,16 @@ export function recommendationLayer(
 }
 
 export function mpaOverlayLayer(
-  rows: Recommendation[],
-): PolygonLayer<ReturnType<typeof cellSquare<Recommendation>>> {
-  const flagged = rows.filter((row) => row.in_mpa === true);
+  rows: MpaCell[],
+): PolygonLayer<ReturnType<typeof cellSquare<MpaCell>>> {
   return new PolygonLayer({
     id: "mpa-overlay",
-    data: flagged.map(cellSquare),
+    data: rows.map(cellSquare),
     getPolygon: (d) => d.polygon,
-    getFillColor: [...MPA, 70],
-    getLineColor: [...MPA, 220],
-    getLineWidth: 2,
-    lineWidthMinPixels: 2,
+    getFillColor: [...MPA, 55],
+    getLineColor: [...MPA, 170],
+    getLineWidth: 1,
+    lineWidthMinPixels: 1,
     stroked: true,
     filled: true,
     pickable: false,

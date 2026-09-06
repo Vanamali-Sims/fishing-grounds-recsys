@@ -1,6 +1,7 @@
 import type {
   Anomaly,
   HistoryRow,
+  MpaCell,
   Recommendation,
   Stats,
   VesselDetail,
@@ -53,4 +54,20 @@ export function getAnomalies(): Promise<Anomaly[]> {
 
 export function getStats(): Promise<Stats> {
   return getJson("/stats");
+}
+
+export function getMpaCells(bbox?: {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}): Promise<MpaCell[]> {
+  const params = new URLSearchParams({ limit: "4000" });
+  if (bbox) {
+    params.set("west", String(bbox.west));
+    params.set("south", String(bbox.south));
+    params.set("east", String(bbox.east));
+    params.set("north", String(bbox.north));
+  }
+  return getJson(`/mpa-cells?${params}`);
 }

@@ -13,6 +13,7 @@ from api.schemas import (
     CellDetail,
     CellEffort,
     HistoryRow,
+    MpaCell,
     Recommendation,
     Stats,
     VesselDetail,
@@ -77,6 +78,8 @@ def _reason(cell_id: str, gear: str) -> str:
             bits.append(f"{abs(depth):.0f}m depth")
         if dist is not None:
             bits.append(f"{dist:.0f}nm from port")
+        if nullable_bool(row["in_mpa"]) is True:
+            bits.append("inside a marine protected area")
     label = gear.replace("_", " ")
     if label and label != "unknown":
         bits.append(f"typical for {label}")
@@ -355,6 +358,37 @@ def list_anomalies(*, start: date | None, end: date | None, limit: int) -> list[
     ]
 
 
+def list_mpa_cells(
+    *,
+    west: float | None,
+    south: float | None,
+    east: float | None,
+    north: float | None,
+    limit: int,
+) -> list[MpaCell]:
+    store = get_store()
+    flagged = store.cells[store.cells["in_mpa"] == True]  # noqa: E712
+    if flagged.empty:
+        return []
+    if None not in (west, south, east, north):
+        flagged = flagged[
+            (flagged["cell_ll_lon"] >= west)
+            & (flagged["cell_ll_lon"] <= east)
+            & (flagged["cell_ll_lat"] >= south)
+            & (flagged["cell_ll_lat"] <= north)
+        ]
+    rows: list[MpaCell] = []
+    for cell_id, row in flagged.head(limit).iterrows():
+        rows.append(
+            MpaCell(
+                cell_id=str(cell_id),
+                lat=float(row["cell_ll_lat"]),
+                lon=float(row["cell_ll_lon"]),
+            )
+        )
+    return rows
+
+
 def get_stats() -> Stats:
     con = duckdb.connect()
     try:
@@ -371,6 +405,8 @@ def get_stats() -> Stats:
         ).fetchone()
     finally:
         con.close()
+    store = get_store()
+    n_mpa = int((store.cells["in_mpa"] == True).sum())  # noqa: E712
     return Stats(
         n_vessels=int(n_vessels),
         n_cells=int(n_cells),
@@ -378,6 +414,8 @@ def get_stats() -> Stats:
         fishing_hours=float(hours),
         years=list(YEARS),
         note="C3 live. Australian EEZ gold artefacts; ALS + content fold-in.",
+        n_mpa_cells=n_mpa,
+        mpa_ready=n_mpa > 0,
     )
 
 

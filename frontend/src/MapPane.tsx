@@ -2,7 +2,7 @@ import { DeckGL } from "@deck.gl/react";
 import type { MapViewState, PickingInfo } from "@deck.gl/core";
 import { Map } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { HistoryRow, Recommendation } from "./types";
+import type { HistoryRow, MpaCell, Recommendation } from "./types";
 import { historyLayer, mpaOverlayLayer, recommendationLayer } from "./layers";
 
 const CARTO_KEY = import.meta.env.VITE_CARTO_API_KEY;
@@ -32,9 +32,11 @@ type Props = {
   pane: Pane;
   history: HistoryRow[];
   recommendations: Recommendation[];
+  mpaCells: MpaCell[];
   focus: string | null;
   showMpa: boolean;
   loading: boolean;
+  emptyLabel: string;
   onFocus: (cellId: string | null, reason?: string) => void;
 };
 
@@ -44,18 +46,22 @@ export default function MapPane({
   pane,
   history,
   recommendations,
+  mpaCells,
   focus,
   showMpa,
   loading,
+  emptyLabel,
   onFocus,
 }: Props) {
-  const layers =
+  const overlay = showMpa && mpaCells.length ? [mpaOverlayLayer(mpaCells)] : [];
+  const dataLayers =
     pane === "observed"
       ? [historyLayer(history, focus)]
-      : [
-          recommendationLayer(recommendations, focus),
-          ...(showMpa ? [mpaOverlayLayer(recommendations)] : []),
-        ];
+      : [recommendationLayer(recommendations, focus)];
+  const layers = [...overlay, ...dataLayers];
+  const empty =
+    !loading &&
+    (pane === "observed" ? history.length === 0 : recommendations.length === 0);
 
   return (
     <div className={`chart-frame${loading ? " is-loading" : ""}`}>
@@ -85,6 +91,7 @@ export default function MapPane({
         <Map mapStyle={MAP_STYLE} attributionControl={false} />
       </DeckGL>
       {loading && <div className="chart-loading">Sounding the grounds…</div>}
+      {empty && <div className="chart-empty">{emptyLabel}</div>}
     </div>
   );
 }

@@ -12,7 +12,7 @@ from src.clean.report import utcnow, write_report
 from src.features.depth import attach_depth
 from src.features.eez import attach_eez
 from src.features.extract import extract_cells
-from src.features.mpa import attach_mpa
+from src.features.mpa import attach_mpa, find_mpa_source
 from src.features.ports import attach_port_distance
 from src.features.schema import AUS_EEZ_SOVEREIGN, CELL_COLUMNS, NULL_POLICY
 from src.paths import CELLS_PATH, REPORTS_DIR, WDPA_DIR
@@ -26,6 +26,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Build the gold cell dimension (depth, EEZ, port distance, MPA)."
     )
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--refresh-mpa",
+        action="store_true",
+        help="Re-join MPA polygons onto the existing cells.parquet.",
+    )
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args(argv)
 
@@ -43,6 +48,42 @@ def _write_cells(df) -> None:
     if CELLS_PATH.exists():
         CELLS_PATH.unlink()
     tmp.replace(CELLS_PATH)
+
+
+def _mpa_summary(cells) -> dict:
+    source = find_mpa_source()
+    aus = cells["eez_sovereign"] == AUS_EEZ_SOVEREIGN
+    return {
+        "n_in_mpa": int((cells["in_mpa"] == True).sum()),  # noqa: E712
+        "n_in_mpa_null": int(cells["in_mpa"].isna().sum()),
+        "n_aus_in_mpa": int(((cells["in_mpa"] == True) & aus).sum()),  # noqa: E712
+        "mpa_source": None if source is None else source.name,
+        "wdpa_present": WDPA_DIR.exists(),
+        "null_policy": NULL_POLICY,
+    }
+
+
+def refresh_mpa(*, memory: PeakMemory | None = None) -> dict:
+    if not CELLS_PATH.exists():
+        raise FileNotFoundError(
+            f"Missing cells.parquet ({CELLS_PATH}). Run python -m src.features.build first."
+        )
+    LOG.info("refreshing in_mpa on %s", CELLS_PATH)
+    cells = pq.read_table(CELLS_PATH).to_pandas()
+    if memory:
+        memory.sample()
+    cells = attach_mpa(cells)
+    if memory:
+        memory.sample()
+    _write_cells(cells)
+    summary = {
+        "skipped": False,
+        "refreshed_mpa": True,
+        "output": str(CELLS_PATH),
+        "n_cells": len(cells),
+        **_mpa_summary(cells),
+    }
+    return summary
 
 
 def build(*, force: bool = False, memory: PeakMemory | None = None) -> dict:
@@ -89,9 +130,7 @@ def build(*, force: bool = False, memory: PeakMemory | None = None) -> dict:
             else {}
         ),
         "n_with_port_distance": int(cells["distance_to_port_m"].notna().sum()),
-        "n_in_mpa_null": int(cells["in_mpa"].isna().sum()),
-        "wdpa_present": WDPA_DIR.exists(),
-        "null_policy": NULL_POLICY,
+        **_mpa_summary(cells),
     }
     return summary
 
@@ -101,7 +140,10 @@ def main(argv: list[str] | None = None) -> dict:
     setup_logging(args.log_level)
     memory = PeakMemory()
     started = utcnow()
-    result = build(force=args.force, memory=memory)
+    if args.refresh_mpa:
+        result = refresh_mpa(memory=memory)
+    else:
+        result = build(force=args.force, memory=memory)
     result.update(
         {
             "stage": "a3",

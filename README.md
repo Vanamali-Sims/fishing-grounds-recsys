@@ -48,7 +48,7 @@ Application 2 is the interesting one: the same latent factors that generate reco
 | GEBCO_2026 grid | Seabed depth per cell |
 | Marine Regions World EEZ v12 | Jurisdiction per cell |
 | GFW Named Anchorages | Port locations → distance-to-port per cell |
-| WDPA / Protected Planet *(planned)* | Protected area constraint layer |
+| WDPA / Protected Planet (Sep 2026 AUS gdb) | Marine/coastal protected-area constraint layer |
 
 Full schemas, provenance, checksums and known caveats: **[DATA.md](DATA.md)**.
 

@@ -5,6 +5,7 @@ import MapPane from "./MapPane";
 import {
   getAnomalies,
   getHistory,
+  getMpaCells,
   getRecommendations,
   getStats,
   getVessel,
@@ -13,6 +14,7 @@ import {
 import type {
   Anomaly,
   HistoryRow,
+  MpaCell,
   Recommendation,
   Stats,
   VesselDetail,
@@ -38,6 +40,22 @@ function formatGear(gear: string): string {
   return gear.replaceAll("_", " ");
 }
 
+function viewBbox(view: MapViewState): {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+} {
+  const lonSpan = 360 / 2 ** Math.max(view.zoom, 1);
+  const latSpan = 180 / 2 ** Math.max(view.zoom - 0.4, 1);
+  return {
+    west: view.longitude - lonSpan / 2,
+    east: view.longitude + lonSpan / 2,
+    south: view.latitude - latSpan / 2,
+    north: view.latitude + latSpan / 2,
+  };
+}
+
 export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [vessels, setVessels] = useState<VesselSummary[]>([]);
@@ -49,12 +67,14 @@ export default function App() {
   const [detail, setDetail] = useState<VesselDetail | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [mpaCells, setMpaCells] = useState<MpaCell[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [excludeMpa, setExcludeMpa] = useState(true);
   const [showMpa, setShowMpa] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingMaps, setLoadingMaps] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(true);
   const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<{ cellId: string; reason?: string } | null>(null);
@@ -65,9 +85,21 @@ export default function App() {
   }, [query]);
 
   useEffect(() => {
-    getStats().then(setStats).catch((err: Error) => setError(err.message));
+    setLoadingStats(true);
+    getStats()
+      .then(setStats)
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoadingStats(false));
     getAnomalies().then(setAnomalies).catch(() => setAnomalies([]));
   }, []);
+
+  useEffect(() => {
+    if (!showMpa) return;
+    const timer = window.setTimeout(() => {
+      getMpaCells(viewBbox(viewState)).then(setMpaCells).catch(() => setMpaCells([]));
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [showMpa, viewState.longitude, viewState.latitude, viewState.zoom]);
 
   useEffect(() => {
     setLoadingList(true);
@@ -119,7 +151,10 @@ export default function App() {
 
   const focus = pinned?.cellId ?? hoverId;
   const reason = pinned?.reason ?? recs.find((row) => row.cell_id === focus)?.reason ?? recs[0]?.reason;
-  const mpaCount = recs.filter((row) => row.in_mpa === true).length;
+  const observedIds = useMemo(() => new Set(history.map((row) => row.cell_id)), [history]);
+  const overlapCount = recs.filter((row) => observedIds.has(row.cell_id)).length;
+  const blockedInView = recs.filter((row) => row.in_mpa === true).length;
+  const mpaReady = Boolean(stats?.mpa_ready);
 
   return (
     <div className="app">
@@ -137,7 +172,11 @@ export default function App() {
           the model would send it next. Maps stay locked together.
         </p>
 
-        {stats && (
+        {loadingStats ? (
+          <div className="skeleton" aria-hidden="true">
+            <div />
+          </div>
+        ) : stats ? (
           <dl className="stats">
             <div>
               <dt>Vessels</dt>
@@ -148,7 +187,7 @@ export default function App() {
               <dd>{stats.years.join("–")}</dd>
             </div>
           </dl>
-        )}
+        ) : null}
 
         <label className="field">
           <span>Find a vessel</span>
@@ -186,7 +225,7 @@ export default function App() {
             checked={excludeMpa}
             onChange={(event) => setExcludeMpa(event.target.checked)}
           />
-          Exclude MPAs from recommendations
+          Exclude protected cells from recommendations
         </label>
         <label className="check">
           <input
@@ -194,8 +233,13 @@ export default function App() {
             checked={showMpa}
             onChange={(event) => setShowMpa(event.target.checked)}
           />
-          Shade MPA cells ({mpaCount})
+          Shade protected areas ({mpaReady ? mpaCells.length : 0} in view)
         </label>
+        <p className="muted mpa-status">
+          {mpaReady
+            ? `${(stats?.n_mpa_cells ?? 0).toLocaleString()} cells flagged from WDPA marine/coastal polygons.`
+            : "Protected-area layer is unknown — filter cannot drop closed cells yet."}
+        </p>
 
         <ul className="legend">
           <li><span className="swatch teak" /> Observed hours</li>
@@ -211,6 +255,9 @@ export default function App() {
           </div>
         ) : (
           <ul className="fleet">
+            {vessels.length === 0 && (
+              <li className="muted">No vessels match that search.</li>
+            )}
             {vessels.map((vessel) => (
               <li key={vessel.mmsi}>
                 <button
@@ -265,6 +312,27 @@ export default function App() {
       </aside>
 
       <main className="charts">
+        <div className="compare-strip">
+          <p>
+            <strong>{history.length}</strong> observed
+            <span aria-hidden="true"> · </span>
+            <strong>{recs.length}</strong> recommended
+            <span aria-hidden="true"> · </span>
+            <strong>{overlapCount}</strong> overlap
+            <span aria-hidden="true"> · </span>
+            <strong>{showMpa ? mpaCells.length : 0}</strong> protected in view
+          </p>
+          <p className="muted">
+            {overlapCount === 0
+              ? "None of the recommended cells were already fished."
+              : `${overlapCount} recommended cell${overlapCount === 1 ? "" : "s"} already appear in this vessel's history.`}
+            {excludeMpa && mpaReady
+              ? " Closed cells are held out of the ranking."
+              : !excludeMpa && blockedInView
+                ? ` ${blockedInView} recommended cell${blockedInView === 1 ? "" : "s"} sit inside a protected area.`
+                : ""}
+          </p>
+        </div>
         <section className="chart">
           <h2>Observed</h2>
           <MapPane
@@ -273,9 +341,11 @@ export default function App() {
             onViewStateChange={setViewState}
             history={history}
             recommendations={recs}
+            mpaCells={mpaCells}
             focus={focus}
-            showMpa={false}
+            showMpa={showMpa}
             loading={loadingMaps}
+            emptyLabel="No observed fishing cells for this vessel"
             onFocus={(cellId, nextReason) => {
               setHoverId(cellId);
               if (cellId && nextReason) setPinned({ cellId, reason: nextReason });
@@ -290,9 +360,11 @@ export default function App() {
             onViewStateChange={setViewState}
             history={history}
             recommendations={recs}
+            mpaCells={mpaCells}
             focus={focus}
             showMpa={showMpa}
             loading={loadingMaps}
+            emptyLabel="No recommendations in this filter"
             onFocus={(cellId, nextReason) => {
               setHoverId(cellId);
               if (cellId && nextReason) setPinned({ cellId, reason: nextReason });

@@ -195,13 +195,27 @@ Only this snapshot is needed — port locations are near-static, so there's no v
 
 ---
 
-## 5. WDPA / Protected Planet — marine protected areas *(planned)*
+## 5. WDPA / Protected Planet — marine protected areas
 
 **Source:** [protectedplanet.net](https://www.protectedplanet.net/)
+**Release:** September 2026 (WDPCA)
+**Licence:** non-commercial use; attribute UNEP-WCMC and IUCN
 
-Not downloaded yet. The constraint layer: recommendations are filtered against MPA polygons at serving time so the system cannot suggest a closed area, and the UI shows the next-best legal alternative instead.
+On disk:
 
-Check the current terms of use before redistributing any derived layer.
+| File | What it is |
+| --- | --- |
+| `WDPA_Sep2026_Public_csv/` and `WDPA_WDOECM_Sep2026_Public_AUS_csv.csv` | Attribute tables only (`TYPE=Polygon` is a flag, not geometry) |
+| `wdpa/WDPA_WDOECM_Sep2026_Public_AUS.gdb` | Official AUS File Geodatabase — **this is the join source** |
+| `wdpa/WDPA_WDOECM_Sep2026_Public_AUS.zip` | 70.9 MB country download from Protected Planet |
+
+The join uses layer `WDPA_WDOECM_poly_Sep2026_AUS`, keeps `REALM` in {Marine, Coastal} and designated/inscribed/established/adopted status, then flags a 0.1° cell if its centroid falls inside a polygon. Terrestrial parks are not used as fishing-ground constraints.
+
+This is a coarse legal filter, not a zoning engine: some WDPA marine polygons still allow fishing in multiple-use zones.
+
+Citation: *UNEP-WCMC and IUCN (2026). Protected Planet: The World Database on Protected and Conserved Areas (WDPCA) [On-line], September 2026, Cambridge, UK. https://doi.org/10.34892/6fwd-af11*
+
+Re-fetch: `python -m src.features.mpa --download` then `python -m src.features.build --refresh-mpa`.
 
 ---
 

@@ -9,6 +9,7 @@ from api.schemas import (
     CellDetail,
     CellEffort,
     HistoryRow,
+    MpaCell,
     Recommendation,
     Stats,
     VesselDetail,
@@ -389,7 +390,40 @@ def list_anomalies(*, start: date | None, end: date | None, limit: int) -> list[
     return rows[:limit]
 
 
+def list_mpa_cells(
+    *,
+    west: float | None,
+    south: float | None,
+    east: float | None,
+    north: float | None,
+    limit: int,
+) -> list[MpaCell]:
+    seen: dict[str, MpaCell] = {}
+    for recs in _RECS.values():
+        for rec in recs:
+            if rec.in_mpa is not True:
+                continue
+            if west is not None and rec.lon < west:
+                continue
+            if east is not None and rec.lon > east:
+                continue
+            if south is not None and rec.lat < south:
+                continue
+            if north is not None and rec.lat > north:
+                continue
+            seen[rec.cell_id] = MpaCell(cell_id=rec.cell_id, lat=rec.lat, lon=rec.lon)
+    return list(seen.values())[:limit]
+
+
 def get_stats() -> Stats:
+    n_mpa = len(
+        {
+            rec.cell_id
+            for recs in _RECS.values()
+            for rec in recs
+            if rec.in_mpa is True
+        }
+    )
     return Stats(
         n_vessels=117078,
         n_cells=2040786,
@@ -397,4 +431,6 @@ def get_stats() -> Stats:
         fishing_hours=226_091_223.7,
         years=[2023, 2024],
         note="C1 stub. Counts are from A2 silver EDA, not live queries.",
+        n_mpa_cells=n_mpa,
+        mpa_ready=n_mpa > 0,
     )

@@ -65,7 +65,7 @@ The plan in `context/plan.MD` sequenced work so evaluation existed before the mo
 | --- | --- | --- | --- |
 | A | A1 ingest | Streamed zip/CSV → bronze Parquet, then silver clean | Done |
 | A | A2 EDA | Notebook only — gear, seasonality, regions, quality | Done (`notebooks/01_eda.ipynb`) |
-| A | A3 spatial | Cell dimension: depth, EEZ, port distance, MPA flag | Done except MPA (WDPA not downloaded) |
+| A | A3 spatial | Cell dimension: depth, EEZ, port distance, MPA flag | Done (WDPA AUS gdb, marine/coastal) |
 | B | B1 matrix | Transit-filtered fishing events + sparse CSR | Done, scoped to Australian EEZ |
 | B | B2 eval | Temporal split, ranking metrics, leak check | Done |
 | B | B3 baselines | Global popularity, popularity-by-gear | Done |
@@ -74,7 +74,7 @@ The plan in `context/plan.MD` sequenced work so evaluation existed before the mo
 | C | C1 API stub | FastAPI contract with hardcoded bodies | Done |
 | C | C2 frontend | Sea Anchor map UI wired to the contract | Done |
 | C | C3 live API | Same contract, gold artefacts + ALS | Done (auto-swaps when artefacts exist) |
-| C | C4 polish | MPA overlay, comparison view, loading states | Partial — UI exists; real MPA data does not |
+| C | C4 polish | MPA overlay, comparison view, loading states | Done |
 | D | D1 anomalies | Low-score-but-observed events | Serving-time implementation exists |
 | D | D2 engine benchmark | `docs/engine-choice.md` | **Not written** (README mentions it) |
 | D | D3 model card | `docs/model-card.md` | **Not written** (README mentions it) |
@@ -121,9 +121,9 @@ Gear (`vessel_class_gfw`) is the strongest metadata signal. Trawlers, drifting l
 
 Global port / anchorage points. Multiple rows per port. Distance-to-port is the **minimum** geodesic distance from the cell centroid to any anchorage, not distance to a port centroid. Explains range constraints on smaller vessels.
 
-### 5.5 WDPA / Protected Planet (planned)
+### 5.5 WDPA / Protected Planet
 
-The constraint layer for MPAs. **Not downloaded.** `in_mpa` is written as null and must not be treated as false. The API still has `exclude_mpa`; in live mode it currently does nothing because nothing is flagged.
+The constraint layer for MPAs. Australian File Geodatabase is on disk (`data/wdpa/WDPA_WDOECM_Sep2026_Public_AUS.gdb`). Cells whose centroid falls in a marine or coastal WDPA polygon are `in_mpa=True`; the rest are `False`. The public CSVs are attributes only.
 
 ### 5.6 Important caveats (do not skip)
 
@@ -240,7 +240,7 @@ Unique cells from silver, then four attaches:
 1. **Depth** (`depth.py`) — zonal mean/min from the GEBCO GeoTIFF for cells entirely inside the file bbox. Null outside.
 2. **EEZ** (`eez.py`) — point-in-polygon on cell centroids with a Shapely STRtree. If a point hits multiple polygons, the smallest `AREA_KM2` wins.
 3. **Port distance** (`ports.py`) — unit-sphere KD-tree nearest anchorage, then haversine in metres.
-4. **MPA** (`mpa.py`) — all null until WDPA is on disk. If the directory appears without an implementation, the function raises rather than silently writing false.
+4. **MPA** (`mpa.py`) — WDPA AUS geodatabase, marine/coastal polygons only. Null only if no vector source exists.
 
 Output: `data/processed/cells.parquet`.
 
@@ -358,7 +358,7 @@ Each recommendation carries a `reason` built from cell attributes, e.g. `"118m d
 ### 8.5 What is not a real method yet
 
 - **Season.** The API accepts `season`. In both stub and live backends, `season=winter` **reverses the ranked list**. That is leftover stub behaviour, not a seasonal model.
-- **MPA exclusion.** The filter is wired (`exclude_mpa=true` drops `in_mpa is True`). With WDPA absent, live `in_mpa` is always null, so the filter is a no-op.
+- **MPA exclusion.** `exclude_mpa=true` drops `in_mpa is True`. Overlay cells come from `GET /mpa-cells` so the shade layer still shows when the filter is on.
 - **Effort forecasting.** Not implemented.
 
 ---
@@ -604,7 +604,7 @@ Tests: `python -m unittest discover -s tests`.
 
 A naive reading is “help boats catch more fish.” Two design choices push against that: recommendations are meant to be filtered against protected areas and jurisdictions at serving time, and the same model is used to detect anomalous activity.
 
-Today the MPA filter is a no-op because WDPA is not on disk. Do not demo it as a working legal constraint until that join exists.
+The MPA filter uses WDPA marine/coastal polygons for Australia. It is a coarse constraint: some multiple-use zones still allow fishing. Low model scores remain a prompt, not evidence.
 
 Low model scores are **not evidence of illegal activity**. They are a prompt for a human to look closer. This project is not an enforcement tool.
 
@@ -614,7 +614,7 @@ Licence: code MIT. GFW data CC BY-NC 4.0 (non-commercial). Attribute GFW, Kroods
 
 ## 16. Open gaps (so you do not claim them)
 
-- WDPA download + MPA join
+- Fine-grained MPA zoning (no-take vs multiple-use)
 - Real seasonal model (current `season=winter` reverses the list)
 - Effort forecasting
 - `docs/engine-choice.md` and `docs/model-card.md` (README advertises both)

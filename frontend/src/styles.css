@@ -196,8 +196,37 @@ select {
 .charts {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr;
   min-width: 0;
   height: 100%;
+}
+
+.compare-strip {
+  grid-column: 1 / -1;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem 1.2rem;
+  padding: 0.55rem 0.9rem;
+  background: rgba(8, 20, 28, 0.82);
+  border-bottom: 1px solid var(--line);
+}
+
+.compare-strip p {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.compare-strip strong {
+  color: var(--brass);
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.05rem;
+}
+
+.mpa-status {
+  margin: -0.35rem 0 0;
+  font-size: 0.78rem;
 }
 
 .chart {
@@ -227,7 +256,8 @@ select {
   inset: 0;
 }
 
-.chart-loading {
+.chart-loading,
+.chart-empty {
   position: absolute;
   inset: 0;
   z-index: 3;
@@ -239,6 +269,14 @@ select {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-size: 0.78rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+.chart-empty {
+  background: rgba(8, 20, 28, 0.28);
+  color: var(--muted);
+  letter-spacing: 0.08em;
 }
 
 .legend {
@@ -308,6 +346,10 @@ select {
   .app,
   .charts {
     grid-template-columns: 1fr;
+  }
+
+  .charts {
+    grid-template-rows: auto auto auto;
   }
 
   .app {

@@ -52,6 +52,14 @@ export type Stats = {
   fishing_hours: number;
   years: number[];
   note: string;
+  n_mpa_cells?: number | null;
+  mpa_ready?: boolean;
+};
+
+export type MpaCell = {
+  cell_id: string;
+  lat: number;
+  lon: number;
 };
 
 export type CellPolygon<T> = T & {

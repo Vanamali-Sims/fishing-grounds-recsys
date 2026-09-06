@@ -47,7 +47,10 @@ GEBCO_TIF = GEBCO_DIR / "gebco_2026_n-30.783_s-58.195_w99.967_e159.976_geotiff.t
 EEZ_DIR = DATA_DIR / "World_EEZ_v12_20231025_gpkg" / "World_EEZ_v12_20231025_gpkg"
 EEZ_GPKG = EEZ_DIR / "eez_v12.gpkg"
 ANCHORAGES_CSV = DATA_DIR / "named_anchorages_v2_pipe_v4_202608.csv"
-WDPA_DIR = DATA_DIR / "wdpa"  # not downloaded yet
+WDPA_CSV_DIR = DATA_DIR / "WDPA_Sep2026_Public_csv"  # attributes only
+WDPA_DIR = DATA_DIR / "wdpa"
+WDPA_GDB = WDPA_DIR / "WDPA_WDOECM_Sep2026_Public_AUS.gdb"
+WDPA_ZIP = WDPA_DIR / "WDPA_WDOECM_Sep2026_Public_AUS.zip"
 
 QUARANTINE_DIR = PROCESSED_DIR / "quarantine"
 QUARANTINE_INTERACTIONS_DIR = QUARANTINE_DIR / "interactions"

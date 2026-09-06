@@ -2,8 +2,8 @@
 
 Centroid is the 0.1° cell centre (lower-left + 0.05°). Depth is only defined
 inside the GEBCO subset bbox (southern Australia). EEZ is global. MPA is
-null until WDPA is downloaded. High-seas cells have null EEZ — that is a
-real attribute, not a join failure.
+null until a polygon source is on disk (CAPAD marine or WDPA). High-seas
+cells have null EEZ — that is a real attribute, not a join failure.
 """
 
 from __future__ import annotations
@@ -47,5 +47,8 @@ NULL_POLICY = {
     "depth_min_m": "same as depth_mean_m",
     "eez_sovereign": "null on high seas / unmatched (expected, not a join bug)",
     "distance_to_port_m": "null only if anchorage file is missing",
-    "in_mpa": "null until WDPA is on disk; do not treat as False",
+    "in_mpa": (
+        "null until an MPA vector is on disk; True/False after the join. "
+        "Do not treat null as False."
+    ),
 }

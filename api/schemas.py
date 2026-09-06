@@ -64,6 +64,12 @@ class Anomaly(BaseModel):
     observed_hours: float
 
 
+class MpaCell(BaseModel):
+    cell_id: str
+    lat: float
+    lon: float
+
+
 class Stats(BaseModel):
     n_vessels: int
     n_cells: int
@@ -71,3 +77,5 @@ class Stats(BaseModel):
     fishing_hours: float
     years: list[int]
     note: str
+    n_mpa_cells: int | None = None
+    mpa_ready: bool = False

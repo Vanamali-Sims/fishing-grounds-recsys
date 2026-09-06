@@ -12,6 +12,7 @@ from api.schemas import (
     Anomaly,
     CellDetail,
     HistoryRow,
+    MpaCell,
     Recommendation,
     Stats,
     VesselDetail,
@@ -88,6 +89,19 @@ def cell(cell_id: str) -> CellDetail:
     if row is None:
         raise HTTPException(status_code=404, detail="cell not found")
     return row
+
+
+@app.get("/mpa-cells", response_model=list[MpaCell])
+def mpa_cells(
+    west: float | None = None,
+    south: float | None = None,
+    east: float | None = None,
+    north: float | None = None,
+    limit: int = Query(default=4000, ge=1, le=12000),
+) -> list[MpaCell]:
+    return _backend().list_mpa_cells(
+        west=west, south=south, east=east, north=north, limit=limit
+    )
 
 
 @app.get("/anomalies", response_model=list[Anomaly])

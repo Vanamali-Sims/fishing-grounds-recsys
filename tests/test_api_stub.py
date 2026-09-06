@@ -81,6 +81,19 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(cell.status_code, 200)
         self.assertEqual(cell.json()["cell_id"], cell_id)
 
+    def test_mpa_cells_shape(self) -> None:
+        res = client.get("/mpa-cells", params={"limit": 20})
+        self.assertEqual(res.status_code, 200)
+        rows = res.json()
+        self.assertIsInstance(rows, list)
+        for row in rows:
+            self.assertIn("cell_id", row)
+            self.assertIn("lat", row)
+            self.assertIn("lon", row)
+        stats = client.get("/stats").json()
+        self.assertIn("mpa_ready", stats)
+        self.assertIn("n_mpa_cells", stats)
+
     def test_anomalies_date_filter(self) -> None:
         res = client.get("/anomalies", params={"start": "2024-10-01", "limit": 10})
         self.assertEqual(res.status_code, 200)
