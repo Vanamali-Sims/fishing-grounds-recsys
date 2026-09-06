@@ -12,6 +12,8 @@ Layout (medallion):
 - ``fishing_events.parquet`` — gold fishing events (B1: transit filtered).
 - ``matrix.npz`` — vessel × cell CSR plus index maps (full modelling window).
 - ``splits/`` — temporal train CSR and test relevance (B2).
+- ``als_factors.npz`` — ALS user/item factors (B4).
+- ``content_foldin.npz`` — content → user-factor weights (B5).
 - ``quarantine/`` — rows that failed a hard validation rule.
 - ``reports/`` — row counts, repairs, observations, peak memory.
 """
@@ -35,6 +37,8 @@ MATRIX_PATH = PROCESSED_DIR / "matrix.npz"
 SPLITS_DIR = PROCESSED_DIR / "splits"
 TRAIN_MATRIX_PATH = SPLITS_DIR / "train.npz"
 TEST_RELEVANT_PATH = SPLITS_DIR / "test_relevant.parquet"
+ALS_FACTORS_PATH = PROCESSED_DIR / "als_factors.npz"
+CONTENT_FOLDIN_PATH = PROCESSED_DIR / "content_foldin.npz"
 
 # A3 spatial inputs (raw, gitignored)
 GEBCO_DIR = DATA_DIR / "GEBCO_02_Sep_2026_cb6d79a83e83"

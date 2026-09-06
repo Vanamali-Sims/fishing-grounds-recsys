@@ -1,1 +1,1 @@
-"""Recommenders. B3 baselines first; B4 ALS plugs into the same harness."""
+"""Recommenders: B3 baselines, B4 implicit ALS, B5 content fold-in."""

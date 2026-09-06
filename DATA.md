@@ -218,6 +218,8 @@ Written by the pipeline into `data/processed/`, all gitignored.
 | `matrix.npz` | Sparse vessel × cell CSR matrix plus index mappings (full window) |
 | `splits/train.npz` | Train CSR, same index maps, Q4 2024 held out |
 | `splits/test_relevant.parquet` | Q4 vessel–cell pairs with new-ground / cold-start flags |
+| `als_factors.npz` | Implicit ALS user and item factors |
+| `content_foldin.npz` | Ridge map from vessel metadata to user factors |
 
 **Partitioning.** Interactions are partitioned by year and month so temporal-split queries read only the partitions they need. This is what makes the train/test split cheap enough to iterate on.
 

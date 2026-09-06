@@ -24,5 +24,7 @@ DEFAULT_SCOPE = SCOPE_AUS
 
 # README evaluation protocol: train 2023 through Q3 2024, test Q4 2024.
 TEST_START = date(2024, 10, 1)
+# B4 tunes on Q3 new-grounds, then refits on the full train window.
+VAL_START = date(2024, 7, 1)
 
 DEFAULT_KS = (10, 50)

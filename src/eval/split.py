@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import duckdb
@@ -79,7 +80,10 @@ def write_test_relevant(events_path: Path, dest: Path) -> int:
     return int(n)
 
 
-def train_pairs(events_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def train_pairs(
+    events_path: Path, before: date | None = None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    cutoff = (before or TEST_START).isoformat()
     con = duckdb.connect()
     try:
         con.execute("SET enable_progress_bar = false")
@@ -93,7 +97,7 @@ def train_pairs(events_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             WHERE date < CAST(? AS DATE)
             GROUP BY 1, 2
             """,
-            [events_path.as_posix(), _date_param()],
+            [events_path.as_posix(), cutoff],
         ).fetchnumpy()
     finally:
         con.close()
@@ -143,6 +147,54 @@ def protocol_stats(test_path: Path, train_users: int, train_nnz: int) -> dict:
     stats["train_nnz"] = train_nnz
     stats["test_start"] = _date_param()
     return stats
+
+
+def new_ground_relevant_window(
+    events_path: Path, history_end: date, window_end: date
+) -> dict[str, set[str]]:
+    """Warm vessels → cells first fished in ``[history_end, window_end)``."""
+    con = duckdb.connect()
+    try:
+        con.execute("SET enable_progress_bar = false")
+        rows = con.execute(
+            """
+            WITH history AS (
+              SELECT mmsi, cell_id
+              FROM read_parquet(?)
+              WHERE date < CAST(? AS DATE)
+              GROUP BY 1, 2
+            ),
+            history_users AS (
+              SELECT DISTINCT mmsi FROM history
+            ),
+            holdout AS (
+              SELECT mmsi, cell_id
+              FROM read_parquet(?)
+              WHERE date >= CAST(? AS DATE) AND date < CAST(? AS DATE)
+              GROUP BY 1, 2
+            )
+            SELECT w.mmsi, w.cell_id
+            FROM holdout w
+            LEFT JOIN history h
+              ON w.mmsi = h.mmsi AND w.cell_id = h.cell_id
+            LEFT JOIN history_users u
+              ON w.mmsi = u.mmsi
+            WHERE h.cell_id IS NULL AND u.mmsi IS NOT NULL
+            """,
+            [
+                events_path.as_posix(),
+                history_end.isoformat(),
+                events_path.as_posix(),
+                history_end.isoformat(),
+                window_end.isoformat(),
+            ],
+        ).fetchall()
+    finally:
+        con.close()
+    relevant: dict[str, set[str]] = {}
+    for user, item in rows:
+        relevant.setdefault(str(user), set()).add(str(item))
+    return relevant
 
 
 def load_new_ground_relevant(test_path: Path) -> dict[str, set[str]]:
