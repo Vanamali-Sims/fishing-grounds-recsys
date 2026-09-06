@@ -60,10 +60,12 @@ Raw data is not committed. Run `scripts/download_data.sh` to fetch and verify it
 
 | Model | Precision@10 | Recall@10 | MAP@10 | Coverage |
 | --- | --- | --- | --- | --- |
-| Popularity baseline | – | – | – | – |
-| Popularity by gear type | – | – | – | – |
+| Popularity baseline | 0.0011 | 0.0013 | 0.0011 | 0.0012 |
+| Popularity by gear type | 0.0040 | 0.0043 | 0.0021 | 0.0068 |
 | Implicit ALS | – | – | – | – |
 | ALS + content cold-start | – | – | – | – |
+
+Australian EEZ, 177 warm vessels with Q4 2024 new grounds. Rank unvisited cells by train fishing hours. Gear is ~3.5× global popularity on precision; both are weak — Q4 new grounds are not the busiest cells a vessel has not already worked. ALS has to beat the gear row, not just global.
 
 **Evaluation protocol.** Temporal split, never random: train on 2023 through Q3 2024, test on Q4 2024. A random split would leak future behaviour into training and inflate every metric. Cold-start vessels (first appearing in the test window) are evaluated separately, since collaborative filtering alone cannot serve them.
 
@@ -94,8 +96,9 @@ pip install -r requirements.txt
 ./scripts/download_data.sh        # ~1.7 GB, verifies checksums
 python -m src.ingest.build        # zips → partitioned Parquet
 python -m src.features.matrix     # → sparse interaction matrix
+python -m src.eval.report         # temporal split + leak check
+python -m src.models.baselines    # popularity vs popularity-by-gear
 python -m src.models.train        # ALS
-python -m src.eval.report         # metrics vs baseline
 
 uvicorn api.main:app --reload     # API on :8000
 cd frontend && npm install && npm run dev

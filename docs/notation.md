@@ -15,7 +15,7 @@ GFW zip / CSV  ──►  bronze  ──►  silver  ──►  gold
 | **Silver** | Validated, repaired, derived | `data/processed/interactions/`, `data/processed/vessels.parquet` |
 | **Gold** | Model-ready artefacts | `cells.parquet`, `fishing_events.parquet`, `matrix.npz`, `splits/` |
 
-Commands: `python -m src.ingest.build` writes bronze. `python -m src.clean.build` writes silver. `python -m src.pipeline` runs both. `python -m src.features.matrix` writes the gold matrix. `python -m src.eval.report` writes the temporal split.
+Commands: `python -m src.ingest.build` writes bronze. `python -m src.clean.build` writes silver. `python -m src.pipeline` runs both. `python -m src.features.matrix` writes the gold matrix. `python -m src.eval.report` writes the temporal split. `python -m src.models.baselines` scores popularity on that split.
 
 ---
 
@@ -76,6 +76,6 @@ Gold is not a third copy of the daily table. It is derived from silver for model
 
 Transit filtering (low `fishing_ratio`) happens here, not in silver. The core matrix is scoped to the Australian EEZ; pass `--scope global` to skip that join.
 
-Commands: `python -m src.features.matrix` writes events + CSR. `python -m src.eval.report` writes the temporal split and protocol counts. Ranking metrics live in `src.eval`; baselines (B3) and ALS (B4) call the harness.
+Commands: `python -m src.features.matrix` writes events + CSR. `python -m src.eval.report` writes the temporal split and protocol counts. `python -m src.models.baselines` scores global popularity and popularity-by-gear. Ranking metrics live in `src.eval`; baselines (B3) and ALS (B4) call the harness.
 
-**Evaluation protocol.** Train on 2023 through 2024-09-30, test on Q4 2024. Relevant items for a warm vessel are cells fished in the test window that the vessel did not fish in train (new grounds). Cold-start vessels (first seen in Q4) are counted separately and excluded from collaborative-filtering metrics.
+**Evaluation protocol.** Train on 2023 through 2024-09-30, test on Q4 2024. Relevant items for a warm vessel are cells fished in the test window that the vessel did not fish in train (new grounds). Cold-start vessels (first seen in Q4) are counted separately and excluded from collaborative-filtering metrics. Baselines drop those already-fished cells before ranking.
