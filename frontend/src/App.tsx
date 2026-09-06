@@ -4,6 +4,7 @@ import AnchorMark from "./AnchorMark";
 import MapPane from "./MapPane";
 import {
   getAnomalies,
+  getForecast,
   getHistory,
   getMpaCells,
   getRecommendations,
@@ -13,6 +14,7 @@ import {
 } from "./api";
 import type {
   Anomaly,
+  ForecastRow,
   HistoryRow,
   MpaCell,
   Recommendation,
@@ -67,6 +69,8 @@ export default function App() {
   const [detail, setDetail] = useState<VesselDetail | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [forecast, setForecast] = useState<ForecastRow[]>([]);
+  const [showForecast, setShowForecast] = useState(false);
   const [mpaCells, setMpaCells] = useState<MpaCell[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [excludeMpa, setExcludeMpa] = useState(true);
@@ -92,6 +96,12 @@ export default function App() {
       .finally(() => setLoadingStats(false));
     getAnomalies().then(setAnomalies).catch(() => setAnomalies([]));
   }, []);
+
+  useEffect(() => {
+    getForecast(season || "winter", excludeMpa)
+      .then(setForecast)
+      .catch(() => setForecast([]));
+  }, [season, excludeMpa]);
 
   useEffect(() => {
     if (!showMpa) return;
@@ -150,11 +160,26 @@ export default function App() {
   }, [vessels]);
 
   const focus = pinned?.cellId ?? hoverId;
-  const reason = pinned?.reason ?? recs.find((row) => row.cell_id === focus)?.reason ?? recs[0]?.reason;
   const observedIds = useMemo(() => new Set(history.map((row) => row.cell_id)), [history]);
-  const overlapCount = recs.filter((row) => observedIds.has(row.cell_id)).length;
   const blockedInView = recs.filter((row) => row.in_mpa === true).length;
   const mpaReady = Boolean(stats?.mpa_ready);
+  const rightRows: Recommendation[] = showForecast
+    ? forecast.map((row) => ({
+        cell_id: row.cell_id,
+        lat: row.lat,
+        lon: row.lon,
+        score: row.predicted_hours,
+        depth: null,
+        in_mpa: null,
+        distance_to_port: null,
+        reason: row.reason,
+      }))
+    : recs;
+  const reason =
+    pinned?.reason
+    ?? rightRows.find((row) => row.cell_id === focus)?.reason
+    ?? rightRows[0]?.reason;
+  const overlapCount = rightRows.filter((row) => observedIds.has(row.cell_id)).length;
 
   return (
     <div className="app">
@@ -214,8 +239,10 @@ export default function App() {
           <span>Season</span>
           <select value={season} onChange={(event) => setSeason(event.target.value)}>
             <option value="">Any</option>
+            <option value="summer">Summer</option>
             <option value="autumn">Autumn</option>
             <option value="winter">Winter</option>
+            <option value="spring">Spring</option>
           </select>
         </label>
 
@@ -226,6 +253,14 @@ export default function App() {
             onChange={(event) => setExcludeMpa(event.target.checked)}
           />
           Exclude protected cells from recommendations
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={showForecast}
+            onChange={(event) => setShowForecast(event.target.checked)}
+          />
+          Show effort forecast (climatology)
         </label>
         <label className="check">
           <input
@@ -316,7 +351,7 @@ export default function App() {
           <p>
             <strong>{history.length}</strong> observed
             <span aria-hidden="true"> · </span>
-            <strong>{recs.length}</strong> recommended
+            <strong>{rightRows.length}</strong> {showForecast ? "forecast" : "recommended"}
             <span aria-hidden="true"> · </span>
             <strong>{overlapCount}</strong> overlap
             <span aria-hidden="true"> · </span>
@@ -324,8 +359,8 @@ export default function App() {
           </p>
           <p className="muted">
             {overlapCount === 0
-              ? "None of the recommended cells were already fished."
-              : `${overlapCount} recommended cell${overlapCount === 1 ? "" : "s"} already appear in this vessel's history.`}
+              ? `None of the ${showForecast ? "forecast" : "recommended"} cells were already fished.`
+              : `${overlapCount} ${showForecast ? "forecast" : "recommended"} cell${overlapCount === 1 ? "" : "s"} already appear in this vessel's history.`}
             {excludeMpa && mpaReady
               ? " Closed cells are held out of the ranking."
               : !excludeMpa && blockedInView
@@ -353,18 +388,22 @@ export default function App() {
           />
         </section>
         <section className="chart">
-          <h2>Recommended</h2>
+          <h2>{showForecast ? "Forecast" : "Recommended"}</h2>
           <MapPane
             pane="predicted"
             viewState={viewState}
             onViewStateChange={setViewState}
             history={history}
-            recommendations={recs}
+            recommendations={rightRows}
             mpaCells={mpaCells}
             focus={focus}
             showMpa={showMpa}
             loading={loadingMaps}
-            emptyLabel="No recommendations in this filter"
+            emptyLabel={
+              showForecast
+                ? "No forecast cells for this season"
+                : "No recommendations in this filter"
+            }
             onFocus={(cellId, nextReason) => {
               setHoverId(cellId);
               if (cellId && nextReason) setPinned({ cellId, reason: nextReason });

@@ -70,6 +70,15 @@ class MpaCell(BaseModel):
     lon: float
 
 
+class ForecastRow(BaseModel):
+    cell_id: str
+    lat: float
+    lon: float
+    predicted_hours: float
+    season: str
+    reason: str
+
+
 class Stats(BaseModel):
     n_vessels: int
     n_cells: int

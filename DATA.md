@@ -17,14 +17,19 @@ data/
 │   ├── gebco_2026_n-30.783_s-58.195_w99.967_e159.976_geotiff.tif
 │   ├── GEBCO_Grid_documentation.pdf
 │   └── GEBCO_Grid_terms_of_use.pdf
-└── World_EEZ_v12_20231025_gpkg/
-    └── World_EEZ_v12_20231025_gpkg/
-        ├── eez_v12.gpkg
-        ├── eez_boundaries_v12.gpkg
-        └── LICENSE_EEZ_v12.txt
+├── World_EEZ_v12_20231025_gpkg/
+│   └── World_EEZ_v12_20231025_gpkg/
+│       ├── eez_v12.gpkg
+│       ├── eez_boundaries_v12.gpkg
+│       └── LICENSE_EEZ_v12.txt
+├── WDPA_Sep2026_Public_csv/             # attributes only
+├── WDPA_WDOECM_Sep2026_Public_AUS_csv.csv
+└── wdpa/
+    ├── WDPA_WDOECM_Sep2026_Public_AUS.zip
+    └── WDPA_WDOECM_Sep2026_Public_AUS.gdb
 ```
 
-Not present: `mmsi-daily-csvs-10-v3-2024.zip` (2024 is extracted only), GFW README files (`README-known-issues-v3.txt`, `README-mmsi-v3.txt`, `README-fishing-vessels-v3.txt`), WDPA / Protected Planet.
+Not present: `mmsi-daily-csvs-10-v3-2024.zip` (2024 is extracted only), GFW README files (`README-known-issues-v3.txt`, `README-mmsi-v3.txt`, `README-fishing-vessels-v3.txt`). Fetch GFW + WDPA with `python scripts/download_data.py`.
 
 ---
 
@@ -241,9 +246,9 @@ Written by the pipeline into `data/processed/`, all gitignored.
 
 ## Reproducing
 
-Checksums for the GFW zips and vessel CSV come from the Zenodo record page. A mismatch means a corrupt or truncated download — delete the file and re-fetch rather than proceeding. The 2023 zip and `fishing-vessels-v3.csv` have been checked and match.
+Checksums for the GFW zips and vessel CSV come from the Zenodo record page. `python scripts/download_data.py` fetches those files, verifies MD5, and pulls the official WDPA AUS zip. A mismatch means a corrupt or truncated download — the script deletes the file so you can retry.
 
-2024 daily CSVs are already extracted; the 2024 zip is not on disk. GEBCO and EEZ were downloaded as the regional / GeoPackage products above, not via a project script.
+2024 daily CSVs are already extracted; the 2024 zip is not on disk unless you re-run the script. GEBCO, EEZ, and named anchorages still need a browser download — the script prints those URLs.
 
 ---
 

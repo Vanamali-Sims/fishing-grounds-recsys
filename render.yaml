@@ -1,0 +1,15 @@
+# Blueprint for a free Render web service. Do not apply this until you
+# are ready to deploy. Set ARTEFACT_URL in the dashboard after packing
+# gold files (python scripts/pack_serve_artefacts.py).
+
+services:
+  - type: web
+    name: sea-anchor
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ARTEFACT_URL
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false

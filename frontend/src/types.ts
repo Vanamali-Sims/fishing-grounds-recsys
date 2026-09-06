@@ -62,6 +62,15 @@ export type MpaCell = {
   lon: number;
 };
 
+export type ForecastRow = {
+  cell_id: string;
+  lat: number;
+  lon: number;
+  predicted_hours: number;
+  season: string;
+  reason: string;
+};
+
 export type CellPolygon<T> = T & {
   polygon: [number, number][];
 };

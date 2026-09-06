@@ -36,7 +36,7 @@ A second wrinkle specific to this data: presence hours and fishing hours are rec
 
 1. **Ground recommendation** — score unvisited cells for a given vessel, filtered against marine protected areas so recommendations are legal by construction.
 2. **Anomaly detection** — flag vessels operating where the model assigns very low probability given their gear type, size and fleet. Low-scoring observed activity is a candidate signal for IUU (illegal, unreported and unregulated) fishing.
-3. **Effort forecasting** — project how fishing pressure shifts across regions and seasons.
+3. **Effort forecasting** — southern-hemisphere climatology of fishing hours by cell and season (not a weather model).
 
 Application 2 is the interesting one: the same latent factors that generate recommendations also identify activity that doesn't fit the learned patterns.
 
@@ -52,7 +52,7 @@ Application 2 is the interesting one: the same latent factors that generate reco
 
 Full schemas, provenance, checksums and known caveats: **[DATA.md](DATA.md)**.
 
-Raw data is not committed. Run `scripts/download_data.sh` to fetch and verify it.
+Raw data is not committed. Run `python scripts/download_data.py` (or `scripts/download_data.sh`) to fetch and verify GFW + WDPA. GEBCO, EEZ, and named anchorages still need a browser download — the script prints those steps.
 
 ## Results
 
@@ -95,8 +95,10 @@ cd fishing-grounds-recsys
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-./scripts/download_data.sh        # ~1.7 GB, verifies checksums
+python scripts/download_data.py   # GFW zips + WDPA; prints manual steps
 python -m src.ingest.build        # zips → partitioned Parquet
+python -m src.clean.build
+python -m src.features.build
 python -m src.features.matrix     # → sparse interaction matrix
 python -m src.eval.report         # temporal split + leak check
 python -m src.models.baselines    # popularity vs popularity-by-gear
@@ -106,12 +108,15 @@ uvicorn api.main:app --reload     # API on :8000 (ALS if gold artefacts exist)
 cd frontend && npm install && npm run dev
 ```
 
+Deploy setup (Render free, do not apply until you mean to): [docs/deploy.md](docs/deploy.md). Pack gold with `python scripts/pack_serve_artefacts.py`.
+
 ## Repository layout
 
 ```
 ├── data/                 # gitignored — fetched via script
 ├── scripts/
-│   └── download_data.sh  # idempotent, checksum-verified
+│   ├── download_data.py  # GFW + WDPA, checksum-verified
+│   └── pack_serve_artefacts.py
 ├── src/
 │   ├── ingest/           # zip → Parquet, streamed
 │   ├── features/         # spatial joins, matrix construction
@@ -121,13 +126,14 @@ cd frontend && npm install && npm run dev
 ├── frontend/             # React + map
 ├── notebooks/            # EDA only — pipeline logic lives in src/
 └── docs/
-    ├── engine-choice.md  # benchmark: pandas vs DuckDB vs Spark
-    └── model-card.md     # intended use, limitations, failure modes
+    ├── engine-choice.md  # why DuckDB at ~750 MB/year
+    ├── model-card.md     # intended use, limitations, failure modes
+    └── deploy.md         # Render free + artefact tarball
 ```
 
 ## Engineering notes
 
-**Why DuckDB and not Spark.** One year of the MMSI-daily file is roughly 750 MB compressed. Spark's overhead isn't repaid at this scale, and reaching for it would be cargo-culting. The pipeline uses DuckDB over partitioned Parquet, with a benchmark in `docs/engine-choice.md` establishing where the crossover actually sits. A Spark implementation over the full 2012–2024 history lives on `feature/spark-fullhistory`, where the data volume genuinely justifies it.
+**Why DuckDB and not Spark.** One year of the MMSI-daily file is roughly 750 MB compressed. Spark's overhead isn't repaid at this scale, and reaching for it would be cargo-culting. The pipeline uses DuckDB over partitioned Parquet. The decision — and where Spark would start to pay — is in `docs/engine-choice.md`. There is no Spark branch in this tree.
 
 **Streaming ingest.** The zips are never extracted. Each daily CSV is read from inside the archive, filtered, and appended to Parquet, so the ~10 GB of raw CSV never touches disk. Peak memory stays bounded regardless of input size.
 

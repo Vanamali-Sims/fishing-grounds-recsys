@@ -8,6 +8,7 @@ from api.schemas import (
     Anomaly,
     CellDetail,
     CellEffort,
+    ForecastRow,
     HistoryRow,
     MpaCell,
     Recommendation,
@@ -338,9 +339,35 @@ def get_recommendations(
     rows = list(_RECS.get(mmsi, []))
     if exclude_mpa:
         rows = [r for r in rows if not r.in_mpa]
-    if season == "winter":
-        rows = list(reversed(rows))
+    if season:
+        # Stub prior: keep higher-score shelf cells first in winter-like seasons.
+        reverse = season.lower() == "summer"
+        rows = sorted(rows, key=lambda row: row.score, reverse=not reverse)
     return rows[:k]
+
+
+def list_forecast(
+    *,
+    season: str | None,
+    exclude_mpa: bool,
+    k: int,
+) -> list[ForecastRow]:
+    key = (season or "winter").lower()
+    seen: dict[str, ForecastRow] = {}
+    for recs in _RECS.values():
+        for rec in recs:
+            if exclude_mpa and rec.in_mpa is True:
+                continue
+            hours = rec.score * (18.0 if key == "spring" else 9.0)
+            seen[rec.cell_id] = ForecastRow(
+                cell_id=rec.cell_id,
+                lat=rec.lat,
+                lon=rec.lon,
+                predicted_hours=round(hours, 2),
+                season=key,
+                reason="C1 stub climatology from hardcoded southern-Australia cells.",
+            )
+    return list(seen.values())[:k]
 
 
 def get_cell(cell_id: str) -> CellDetail | None:

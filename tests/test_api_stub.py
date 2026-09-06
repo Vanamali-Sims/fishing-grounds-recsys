@@ -81,6 +81,22 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(cell.status_code, 200)
         self.assertEqual(cell.json()["cell_id"], cell_id)
 
+    def test_forecast_and_season_shape(self) -> None:
+        res = client.get("/forecast", params={"season": "winter", "k": 10})
+        self.assertEqual(res.status_code, 200)
+        rows = res.json()
+        self.assertTrue(rows)
+        self.assertTrue(all("predicted_hours" in row and "season" in row for row in rows))
+        mmsi = self.vessels[0]["mmsi"]
+        winter = client.get(
+            f"/vessels/{mmsi}/recommendations",
+            params={"k": 10, "season": "winter"},
+        ).json()
+        self.assertTrue(winter)
+        self.assertTrue(all("reason" in row for row in winter))
+        health = client.get("/health").json()
+        self.assertTrue(health["ok"])
+
     def test_mpa_cells_shape(self) -> None:
         res = client.get("/mpa-cells", params={"limit": 20})
         self.assertEqual(res.status_code, 200)

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import duckdb
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 from scipy.sparse import csr_matrix
 
+from src.features.season import load_season_climatology
 from src.features.sparse_matrix import load_csr
 from src.models.als import load_factors
 from src.models.content import load_foldin, load_latest_vessel_table
@@ -54,6 +56,8 @@ class Store:
     cells: pd.DataFrame
     mmsi_index: dict[str, int]
     cell_index: dict[str, int]
+    season_hours: dict[str, dict[str, float]]
+    season_peak: dict[str, float]
 
 
 _STORE: Store | None = None
@@ -69,9 +73,10 @@ def load_store() -> Store:
         raise RuntimeError("ALS factors and full matrix index maps do not match")
     weights, encoder, _ridge = load_foldin(CONTENT_FOLDIN_PATH)
     vessels = load_latest_vessel_table(VESSELS_PATH)
-    cells = pq.read_table(CELLS_PATH).to_pandas().set_index("cell_id", drop=False)
     mmsi_list = [str(x) for x in train_mmsi.tolist()]
     cell_list = [str(x) for x in train_cell.tolist()]
+    cells = _load_serving_cells(cell_list)
+    season_hours, season_peak = load_season_climatology(FISHING_EVENTS_PATH)
     return Store(
         train=train,
         full=full,
@@ -85,7 +90,41 @@ def load_store() -> Store:
         cells=cells,
         mmsi_index={key: i for i, key in enumerate(mmsi_list)},
         cell_index={key: i for i, key in enumerate(cell_list)},
+        season_hours=season_hours,
+        season_peak=season_peak,
     )
+
+
+def _load_serving_cells(catalog: list[str]) -> pd.DataFrame:
+    """Load catalog + MPA cells only. The gold frame is 2.3M global rows."""
+    names = set(pq.read_schema(CELLS_PATH).names)
+    con = duckdb.connect()
+    try:
+        con.execute("CREATE TEMP TABLE catalog (cell_id VARCHAR)")
+        if catalog:
+            con.executemany("INSERT INTO catalog VALUES (?)", [(cell,) for cell in catalog])
+        if "in_mpa" in names:
+            cells = con.execute(
+                """
+                SELECT *
+                FROM read_parquet(?)
+                WHERE cell_id IN (SELECT cell_id FROM catalog)
+                   OR in_mpa IS TRUE
+                """,
+                [CELLS_PATH.as_posix()],
+            ).df()
+        else:
+            cells = con.execute(
+                """
+                SELECT *
+                FROM read_parquet(?)
+                WHERE cell_id IN (SELECT cell_id FROM catalog)
+                """,
+                [CELLS_PATH.as_posix()],
+            ).df()
+    finally:
+        con.close()
+    return cells.set_index("cell_id", drop=False)
 
 
 def get_store() -> Store:

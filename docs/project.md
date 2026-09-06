@@ -7,6 +7,9 @@ Companion docs (detail, not narrative):
 - [README.md](../README.md) — short pitch, results table, quickstart
 - [DATA.md](../DATA.md) — schemas, provenance, checksums, caveats
 - [notation.md](notation.md) — bronze / silver / gold layers
+- [engine-choice.md](engine-choice.md) — why DuckDB at this volume
+- [model-card.md](model-card.md) — intended use and failure modes
+- [deploy.md](deploy.md) — Render free + artefact tarball
 - [context/plan.MD](../context/plan.MD) — original phased plan (A/B/C/D)
 
 The UI is called **Sea Anchor**. The repo is `fishing-grounds-recsys`.
@@ -19,7 +22,7 @@ A recommender system trained on two years of Global Fishing Watch AIS apparent-f
 
 1. **Ground recommendation** — score ocean cells a vessel has never fished, filtered so closed / protected areas are not suggested.
 2. **Anomaly detection** — flag vessels operating where the model thinks they are very unlikely to be, given how similar vessels behave. This is a candidate signal for unusual or potentially IUU (illegal, unreported, unregulated) activity, not a verdict.
-3. **Effort forecasting** — project how fishing pressure shifts across regions and seasons. This is stated as a product goal; it is **not implemented yet**.
+3. **Effort forecasting** — southern-hemisphere climatology of fishing hours by cell and season (`GET /forecast`). This is a prior from 2023–2024, not a dynamical or weather model.
 
 The core model is implicit collaborative filtering (Hu, Koren & Volinsky 2008 ALS) over a sparse vessel × grid-cell matrix. Warm vessels get ALS. Unseen vessels get a content fold-in from gear, flag, and size onto the same latent space. Serving is a FastAPI contract with a React + deck.gl map.
 
@@ -76,8 +79,9 @@ The plan in `context/plan.MD` sequenced work so evaluation existed before the mo
 | C | C3 live API | Same contract, gold artefacts + ALS | Done (auto-swaps when artefacts exist) |
 | C | C4 polish | MPA overlay, comparison view, loading states | Done |
 | D | D1 anomalies | Low-score-but-observed events | Serving-time implementation exists |
-| D | D2 engine benchmark | `docs/engine-choice.md` | **Not written** (README mentions it) |
-| D | D3 model card | `docs/model-card.md` | **Not written** (README mentions it) |
+| D | D2 engine benchmark | `docs/engine-choice.md` | Done (DuckDB vs Spark at ~750 MB/year; no fake cluster timing) |
+| D | D3 model card | `docs/model-card.md` | Done |
+| D | D4 deploy setup | Dockerfile + Render free + artefact pack | Wired, not deployed |
 
 The thin working slice the plan wanted (real data → baseline → map) is in place. The live path is: silver → cells → matrix → split → ALS + fold-in → FastAPI → Sea Anchor.
 
@@ -172,7 +176,7 @@ Zenodo zips / daily CSVs
               Sea Anchor (React + deck.gl + MapLibre)
 ```
 
-**Engine choice.** One year of the MMSI-daily zip is ~750 MB compressed. The pipeline uses DuckDB over partitioned Parquet (and PyArrow for CSV landing). Spark is not used on this 2023–2024 slice; the README mentions a Spark branch for the full 2012–2024 history. There is no `docs/engine-choice.md` in the tree yet.
+**Engine choice.** One year of the MMSI-daily zip is ~750 MB compressed. The pipeline uses DuckDB over partitioned Parquet (and PyArrow for CSV landing). Spark is not used on this 2023–2024 slice. The write-up is [engine-choice.md](engine-choice.md).
 
 **Why medallion layers.** Landing and cleaning are never mixed. If a cleaning rule is wrong, silver can be rebuilt from bronze without touching the zips again. Transit filtering is deliberately *not* a silver rule — steaming lanes belong in EDA.
 
@@ -355,21 +359,23 @@ Same factors, opposite question. For every observed vessel–cell pair in the **
 
 Each recommendation carries a `reason` built from cell attributes, e.g. `"118m depth, 42nm from port, typical for trawlers"`. When attributes are missing it falls back to `"scored from vessels with similar grounds"`. The field is what turns a heatmap into something a person can trust.
 
-### 8.5 What is not a real method yet
+### 8.5 Season and forecast
 
-- **Season.** The API accepts `season`. In both stub and live backends, `season=winter` **reverses the ranked list**. That is leftover stub behaviour, not a seasonal model.
+Southern-hemisphere seasons (summer DJF, autumn MAM, winter JJA, spring SON). Mean yearly fishing hours per cell per season are computed from `fishing_events.parquet` at store load (`src.features.season`).
+
+- **Seasonal ranking.** ALS scores are multiplied by a 0.25–1.0 weight from that cell’s share of the season peak. Cells unused in the season are down-weighted, not dropped. The stub sorts hardcoded scores; it does not reverse the list as a “winter” trick.
+- **Effort forecast.** `GET /forecast` ranks the same climatology as `predicted_hours`. The UI checkbox swaps the right-hand map to those cells. This is last-year’s seasonal map, not a weather or stock forecast.
 - **MPA exclusion.** `exclude_mpa=true` drops `in_mpa is True`. Overlay cells come from `GET /mpa-cells` so the shade layer still shows when the filter is on.
-- **Effort forecasting.** Not implemented.
 
 ---
 
 ## 9. Serving API
 
-`uvicorn api.main:app --reload` on port 8000. CORS is open. Version 0.3.0.
+`uvicorn api.main:app --reload` on port 8000. CORS is open. Version 0.4.0. If `ARTEFACT_URL` is set and gold is missing, the process downloads a tarball on boot (see [deploy.md](deploy.md)).
 
 `api.main` is a thin router. If every gold artefact exists (`als_factors.npz`, `content_foldin.npz`, train + full matrices, cells, vessels, fishing events), it delegates to `api.live`. Otherwise it delegates to `api.stubs`. **The Pydantic shapes in `api.schemas` do not change** between those two backends. That is the C1→C3 contract.
 
-`api.store` loads artefacts once into a process-wide `Store`: train CSR, full CSR, factors, fold-in weights, vessel table, cell frame, MMSI/cell indexes.
+`api.store` loads artefacts once into a process-wide `Store`: train CSR, full CSR, factors, fold-in weights, vessel table, catalog + MPA cells only (not the 2.3M global rows), season climatology, MMSI/cell indexes.
 
 ### Endpoints
 
@@ -381,13 +387,16 @@ Each recommendation carries a `reason` built from cell attributes, e.g. `"118m d
 | GET | `/vessels/{mmsi}/recommendations?k=50&exclude_mpa=true&season=` | `[{cell_id, lat, lon, score, depth, in_mpa, distance_to_port, reason}]` |
 | GET | `/cells/{cell_id}` | `{depth, eez, in_mpa, top_gear_types}` |
 | GET | `/anomalies?start=&end=&limit=` | `[{mmsi, cell_id, date, score, observed_hours}]` |
+| GET | `/mpa-cells?west=&south=&east=&north=` | flagged cells in view |
+| GET | `/forecast?season=&exclude_mpa=&k=` | climatology hours |
 | GET | `/stats` | dashboard aggregates |
+| GET | `/health` | `{ok, live}` |
 
 **Live behaviour worth knowing:**
 
 - Vessel list is every MMSI in the train index, filterable by MMSI substring and gear, sorted by train nnz (most-fished first). Names are always null — GFW has no vessel names in this extract.
 - History is the vessel’s fishing-event cells, top 400 by hours.
-- Recommendations: warm vessels use stored user factors; cold vessels encode metadata and fold in. Already-fished cells are excluded. Over-fetch `3k` then apply MPA filter.
+- Recommendations: warm vessels use stored user factors; cold vessels encode metadata and fold in. Already-fished cells are excluded. Over-fetch, apply season weight if asked, then apply MPA filter.
 - Cell detail joins fishing events to vessels on `(mmsi, year)` for top-3 gears.
 - Anomalies: lowest inner products on observed pairs, then the earliest event date in the optional window.
 - Stats are live counts from `fishing_events.parquet` (AUS-scoped gold), not the global silver totals the stub still quotes.
@@ -425,12 +434,12 @@ The lede on the dock is the product in one sentence: *Same vessel, two questions
 
 1. On load: `GET /stats`, `GET /anomalies?limit=8`.
 2. Vessel list: `GET /vessels?q=&gear=&limit=50`. Search is debounced 250 ms. Selecting a vessel (or the first in the list) loads detail, history, and recommendations in parallel.
-3. Changing `excludeMpa` or `season` refetches recommendations for the same vessel.
+3. Changing `excludeMpa` or `season` refetches recommendations and the climatology forecast. The forecast checkbox swaps the right pane to `GET /forecast`.
 4. Both map panes share one `viewState`. Pan/zoom on either side moves the other.
 5. Hover/click a cell highlights it on both panes and shows the recommendation `reason` in the dock. Tooltips show hours (left) or score + reason (right).
 6. Clicking an anomaly row selects that MMSI and pins its cell.
 
-Cells are drawn as 0.1° squares from the lower-left corner (`cellSquare` in `types.ts`). Fill alpha scales with fishing hours (observed) or model score (recommended). MPA cells can be shaded on the right pane; the overlay is driven by `in_mpa` on recommendation rows, which is currently unused in live mode.
+Cells are drawn as 0.1° squares from the lower-left corner (`cellSquare` in `types.ts`). Fill alpha scales with fishing hours (observed) or model score (recommended). MPA shade is `GET /mpa-cells` for the current map bbox, not the recommendation payload.
 
 Visual language: deep navy dock, teak observed cells, foam recommended cells, red MPA, brass brand. Fonts: Cormorant Garamond + Source Sans 3.
 
@@ -460,7 +469,15 @@ Fisheries/
 ├── requirements.txt          Python deps (DuckDB, PyArrow, spatial, FastAPI)
 ├── docs/
 │   ├── project.md            this file
-│   └── notation.md           bronze / silver / gold
+│   ├── notation.md           bronze / silver / gold
+│   ├── engine-choice.md
+│   ├── model-card.md
+│   └── deploy.md
+├── scripts/
+│   ├── download_data.py      GFW zips + WDPA, MD5 checked
+│   └── pack_serve_artefacts.py
+├── Dockerfile
+├── render.yaml
 ├── context/                  gitignored — planning notes (plan.MD)
 ├── data/                     gitignored
 │   ├── mmsi-daily-csvs-…     raw GFW (zip and/or extracted)
@@ -468,6 +485,7 @@ Fisheries/
 │   ├── GEBCO_…/              southern-Australia bathymetry
 │   ├── World_EEZ_v12_…/      EEZ GeoPackage
 │   ├── named_anchorages_….csv
+│   ├── wdpa/                 official AUS File GDB
 │   └── processed/            pipeline outputs (also gitignored)
 │       ├── bronze/
 │       ├── interactions/     silver, hive year=/month=
@@ -498,7 +516,7 @@ Fisheries/
 │   │   └── build.py          CLI
 │   ├── features/             A3 + B1
 │   │   ├── extract.py        unique cells from silver
-│   │   ├── depth.py / eez.py / ports.py / mpa.py
+│   │   ├── depth.py / eez.py / ports.py / mpa.py / season.py
 │   │   ├── schema.py         cell columns + null policy
 │   │   ├── policy.py         transit threshold, AUS/global, dates
 │   │   ├── events.py         transit + EEZ filter
@@ -540,12 +558,13 @@ Fisheries/
     ├── test_matrix_eval.py
     ├── test_baselines.py
     ├── test_als.py
-    └── test_api_stub.py
+    ├── test_api_stub.py
+    └── test_season.py
 ```
 
 **Convention:** notebooks do not own pipeline logic. The moment cleaning or matrix code lives in a notebook, reproducibility dies. Tests use synthetic tables, not the 1.7 GB raw dump.
 
-`scripts/download_data.sh` is mentioned in the README and is **not in the tree**. Downloads today are manual; checksums are in DATA.md.
+`python scripts/download_data.py` fetches GFW zips (MD5 from Zenodo) and the WDPA AUS geodatabase. GEBCO, EEZ, and named anchorages stay manual.
 
 ---
 
@@ -614,14 +633,11 @@ Licence: code MIT. GFW data CC BY-NC 4.0 (non-commercial). Attribute GFW, Kroods
 
 ## 16. Open gaps (so you do not claim them)
 
-- Fine-grained MPA zoning (no-take vs multiple-use)
-- Real seasonal model (current `season=winter` reverses the list)
-- Effort forecasting
-- `docs/engine-choice.md` and `docs/model-card.md` (README advertises both)
-- `scripts/download_data.sh`
+- Fine-grained MPA zoning (no-take vs multiple-use). The WDPA flag treats multiple-use marine parks as closed.
+- Season is a climatology prior on ALS scores, not a second latent model or a weather forecast.
 - Vessel names (not in the GFW extract)
 - Global model (pipeline supports `--scope global`; reported numbers are AUS)
-- Spark full-history path (mentioned as another branch, not this tree)
+- Spark full-history path (not this tree; see engine-choice.md)
 
 ---
 
@@ -637,6 +653,8 @@ Licence: code MIT. GFW data CC BY-NC 4.0 (non-commercial). Attribute GFW, Kroods
 | `python -m src.eval.report` | `splits/`, leak check |
 | `python -m src.models.baselines` | `reports/b3_baselines.json` |
 | `python -m src.models.train` | `als_factors.npz`, `content_foldin.npz` |
+| `python scripts/download_data.py` | GFW zips + WDPA AUS gdb |
+| `python scripts/pack_serve_artefacts.py` | `data/processed/serve_artefacts.tgz` |
 | `uvicorn api.main:app --reload` | HTTP :8000 |
 | `npm run dev` (in `frontend/`) | HTTP :5173 |
 

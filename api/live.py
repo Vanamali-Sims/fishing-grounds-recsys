@@ -12,6 +12,7 @@ from api.schemas import (
     Anomaly,
     CellDetail,
     CellEffort,
+    ForecastRow,
     HistoryRow,
     MpaCell,
     Recommendation,
@@ -26,6 +27,7 @@ from api.store import (
     nullable_bool,
     nullable_float,
 )
+from src.features.season import normalize_season, season_multiplier
 from src.models.als import recommend_user
 from src.models.content import encode_vessels
 from src.paths import FISHING_EVENTS_PATH, YEARS
@@ -210,10 +212,25 @@ def get_recommendations(
     start = int(store.train.indptr[idx])
     end = int(store.train.indptr[idx + 1])
     seen = store.train.indices[start:end]
-    fetch_k = min(max(k * 3, k), len(store.cell_id))
+    season_key = normalize_season(season)
+    fetch_k = min(max(k * 8 if season_key else k * 3, k), len(store.cell_id))
     ranked = recommend_user(
         user_vec, store.item_factors, seen, store.cell_id, fetch_k
     )
+    if season_key:
+        peak = store.season_peak.get(season_key, 0.0)
+        table = store.season_hours.get(season_key, {})
+        ranked = sorted(
+            (
+                (
+                    cell_id,
+                    score * season_multiplier(table.get(cell_id, 0.0), peak),
+                )
+                for cell_id, score in ranked
+            ),
+            key=lambda item: item[1],
+            reverse=True,
+        )
     gear = str(store.vessels.get(mmsi, {}).get("gear") or "unknown")
     rows: list[Recommendation] = []
     for cell_id, score in ranked:
@@ -233,6 +250,10 @@ def get_recommendations(
             in_mpa = nullable_bool(cell["in_mpa"])
         if exclude_mpa and in_mpa is True:
             continue
+        reason = _reason(cell_id, gear)
+        if season_key:
+            hours = store.season_hours.get(season_key, {}).get(cell_id, 0.0)
+            reason = f"{season_key} climatology {hours:.1f}h/yr, {reason}"
         rows.append(
             Recommendation(
                 cell_id=cell_id,
@@ -242,13 +263,53 @@ def get_recommendations(
                 depth=depth,
                 in_mpa=in_mpa,
                 distance_to_port=dist_nm,
-                reason=_reason(cell_id, gear),
+                reason=reason,
             )
         )
         if len(rows) >= k:
             break
-    if season == "winter":
-        rows = list(reversed(rows))
+    return rows
+
+
+def list_forecast(
+    *,
+    season: str | None,
+    exclude_mpa: bool,
+    k: int,
+) -> list[ForecastRow]:
+    store = get_store()
+    season_key = normalize_season(season) or "winter"
+    table = store.season_hours.get(season_key, {})
+    ranked = sorted(table.items(), key=lambda item: item[1], reverse=True)
+    rows: list[ForecastRow] = []
+    for cell_id, hours in ranked:
+        coords = _cell_lat_lon(cell_id)
+        if coords is None:
+            continue
+        in_mpa = None
+        if cell_id in store.cells.index:
+            cell = store.cells.loc[cell_id]
+            if isinstance(cell, pd.DataFrame):
+                cell = cell.iloc[0]
+            in_mpa = nullable_bool(cell["in_mpa"])
+        if exclude_mpa and in_mpa is True:
+            continue
+        lat, lon = coords
+        rows.append(
+            ForecastRow(
+                cell_id=cell_id,
+                lat=lat,
+                lon=lon,
+                predicted_hours=float(hours),
+                season=season_key,
+                reason=(
+                    f"mean {season_key} fishing hours per year in 2023–2024 "
+                    "(climatology, not a dynamical forecast)"
+                ),
+            )
+        )
+        if len(rows) >= k:
+            break
     return rows
 
 
@@ -413,7 +474,7 @@ def get_stats() -> Stats:
         n_interaction_rows=int(n_rows),
         fishing_hours=float(hours),
         years=list(YEARS),
-        note="C3 live. Australian EEZ gold artefacts; ALS + content fold-in.",
+        note="C3 live. Australian EEZ gold artefacts; ALS + fold-in + seasonal climatology.",
         n_mpa_cells=n_mpa,
         mpa_ready=n_mpa > 0,
     )

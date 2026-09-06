@@ -1,5 +1,6 @@
 import type {
   Anomaly,
+  ForecastRow,
   HistoryRow,
   MpaCell,
   Recommendation,
@@ -54,6 +55,15 @@ export function getAnomalies(): Promise<Anomaly[]> {
 
 export function getStats(): Promise<Stats> {
   return getJson("/stats");
+}
+
+export function getForecast(season = "", excludeMpa = true): Promise<ForecastRow[]> {
+  const params = new URLSearchParams({
+    k: "80",
+    exclude_mpa: String(excludeMpa),
+  });
+  if (season) params.set("season", season);
+  return getJson(`/forecast?${params}`);
 }
 
 export function getMpaCells(bbox?: {
